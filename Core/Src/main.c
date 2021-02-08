@@ -24,7 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
-#include <strings.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,6 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,11 +69,232 @@ static void MX_I2C2_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
-
+void LCDCommand(char data, uint8_t addr);
+void LCDData(char data, uint8_t addr);
+void LCDInit(uint8_t addr);
+void LCDWriteChar(char c, uint8_t addr);
+void LCDWriteString(char *str, uint8_t addr);
+void LCDClear(uint8_t addr);
+void LCDCycleEN(uint8_t addr);
+void LCDSetCursor(uint8_t row, uint8_t col, uint8_t addr);
+void LCDShiftRight(uint8_t addr);
+void LCDShiftLeft(uint8_t addr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* DWT based delay */
+uint32_t DWT_Delay_Init(void)
+{
+    /* Disable TRC */
+    CoreDebug->DEMCR &= ~CoreDebug_DEMCR_TRCENA_Msk; // ~0x01000000;
+    /* Enable TRC */
+    CoreDebug->DEMCR |=  CoreDebug_DEMCR_TRCENA_Msk; // 0x01000000;
+    /* Disable clock cycle counter */
+    DWT->CTRL &= ~DWT_CTRL_CYCCNTENA_Msk; //~0x00000001;
+    /* Enable  clock cycle counter */
+    DWT->CTRL |=  DWT_CTRL_CYCCNTENA_Msk; //0x00000001;
+    /* Reset the clock cycle counter value */
+    DWT->CYCCNT = 0;
+    /* 3 NO OPERATION instructions */
+    __ASM volatile ("NOP");
+    __ASM volatile ("NOP");
+    __ASM volatile ("NOP");
+    /* Check if clock cycle counter has started */
+    if(DWT->CYCCNT)
+    {
+       return 0; /*clock cycle counter started*/
+    }
+    else
+    {
+      return 1; /*clock cycle counter not started*/
+    }
+}
+
+__STATIC_INLINE void DWT_Delay_us(volatile uint32_t au32_microseconds)
+{
+  uint32_t au32_initial_ticks = DWT->CYCCNT;
+  uint32_t au32_ticks = (HAL_RCC_GetHCLKFreq() / 1000000);
+  au32_microseconds *= au32_ticks;
+  while ((DWT->CYCCNT - au32_initial_ticks) < au32_microseconds-au32_ticks);
+}
+
+__STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
+{
+  uint32_t au32_initial_ticks = DWT->CYCCNT;
+  uint32_t au32_ticks = (HAL_RCC_GetHCLKFreq() / 1000);
+  au32_milliseconds *= au32_ticks;
+  while ((DWT->CYCCNT - au32_initial_ticks) < au32_milliseconds);
+}
+
+//https://deepbluembedded.com/stm32-delay-microsecond-millisecond-utility-dwt-delay-timer-delay/
+
+
+
+/* LCD Defines */
+
+/**
+ * LCD Pinout:
+ * A0-A7 : D0-D7
+ * B5: RS
+ * B6: RW
+ * B7: E
+ */
+
+#define RS_Pin 5
+#define RW_Pin 6
+#define EN_Pin 7
+
+/**
+ * \fn LCDInit
+ * @brief Initialises both the LCD and the MCP23017
+ *
+ * @param addr Address of the MCP23017
+ */
+void LCDInit(uint8_t addr){
+
+	//Initialise the MCP23017 first
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x00; //write to IODIR_A
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x00; //all outputs
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x00; //all outputs for next address which is IODIR_B
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+	//Pull RS, RW and E pins LOW
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x15; //write to OLAT_B
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0; //just pull everything low
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+	LCDData(0x00, addr); //clear the data pins as well
+	DWT_Delay_ms(30);
+
+
+
+
+}
+
+/**
+ * \fn LCDData
+ * @brief Presents the data to D0 to D7 (located on Bank A)
+ *
+ * @param data Data to send
+ * @param addr I2C Address of the MCP23017
+ */
+void LCDData(char data, uint8_t addr){
+
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x14; //write to GPIO_A
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = data; //present data at output bank A
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+
+}
+
+void LCDCommand(char data, uint8_t addr){
+
+	//first, read current state of Bank B so we can safely toggle pins
+	uint8_t current = 0; //current state of Bank B
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr | 1; //address the MCP23017 and READ from it
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	I2C2->CR1 &= ~(1<<9 | 1<< 10); //Disable ACK and queue condition here (Just after EV6)
+	while ((I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
+	current = I2C2->DR; //read current state of Bank B
+	I2C2->CR1 |= (1<<10); //Re-enable ACK
+
+	current &= ~(1<<RS_Pin); //pull RS down
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x15; //write to GPIO_B
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = current;
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+	LCDData(data, addr);
+	LCDCycleEN(addr);
+}
+
+void LCDCycleEN(uint8_t addr){
+
+	//first, read current state of Bank B so we can safely toggle pins
+	uint8_t current = 0; //current state of Bank B
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr | 1; //address the MCP23017 and READ from it
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	I2C2->CR1 &= ~(1<<9 | 1<< 10); //Disable ACK and queue condition here (Just after EV6)
+	while ((I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
+	current = I2C2->DR; //read current state of Bank B
+	I2C2->CR1 |= (1<<10); //Re-enable ACK
+
+	current &= ~(1<<EN_Pin); //clear Enable pin
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x15; //write to GPIO_B
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = current;
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+	DWT_Delay_us(1);
+
+	current |= (1<<EN_Pin); //set Enable pin
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = addr; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x15; //write to GPIO_B
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = current;
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+
+}
 
 /* USER CODE END 0 */
 
@@ -113,7 +335,8 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-
+  DWT_Delay_Init();
+  I2C2->CR1 |= 1; //enable i2c 2 peripheral for LCD and EEPROM
   /* USER CODE END 2 */
 
   /* Infinite loop */
