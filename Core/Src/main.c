@@ -89,7 +89,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 /* USER CODE BEGIN 0 */
 
 void debug(){
-	GPIOA->BSRR = (1<<7);
+	GPIOA->BSRR = (1<<7); //hmm apparently it doesn't work with brackets
 	GPIOA->BRR = (1<<7);
 }
 
@@ -141,78 +141,85 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 
 /* MCP23017 Defines */
 
-void __attribute__((optimize("O0"))) MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
+void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	//__disable_irq();
-	debug();
-	debug();
-	debug();
+	//TODO: just store the state instead of reading it to save time
 	//first, read current state of Bank B so we can safely toggle pins
 	uint8_t current = 0; //current state of bank b
 	//select register
+	__disable_irq();
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0); //clear SB
+	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((volatile uint32_t)(I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	if(b==A){
 		I2C2->DR = 0x12; //read from bank A
 	}
 	else{
 		I2C2->DR = 0x13;
 	}
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
-
-	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	__enable_irq();
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 	//read in register contents
+	__disable_irq();
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0); //clear SB
+	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr | 1; //address the MCP23017 and READ from it
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
 	if(I2C2->SR2); //read I2C SR2, Note: Can't check for busyness, results in spurious extra byte read
 	I2C2->CR1 &= ~(1 << 10); //Disable ACK and
 	I2C2->CR1 |= (1 << 9); //queue stop condition here (Just after EV6)
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
+
+	while ((I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
 	current = I2C2->DR; //read current state of Bank B
 	I2C2->CR1 |= (1<<10); //Re-enable ACK
+	__enable_irq();
 
-
-	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 
 	current |= (1<<pin);
 
-	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames
+	//Note that all the I2C pointers are already volatile
+	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames. It looks like the interrupt routine is plenty fast when compared to a full byte transfer, but just too long to squeeze into a start condition. YUP, CONFIRMED THAT IT GETS STUCK WAITING FOR THE ADDRESS FLAG, IE the address flag is not set!
 	//write out the new state
+	__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0) debug(); //clear SB
+	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((volatile uint32_t)(I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	//__enable_irq(); didn't work here
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	if(b==A){
 		I2C2->DR = 0x14;
 	}
 	else{
 		I2C2->DR = 0x15;
 	}
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = current; //just pull everything low
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
-	//__enable_irq();
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	__enable_irq();
 
 }
 
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
+	GPIOA->BSRR = (1<<7);
 	//first, read current state of Bank B so we can safely toggle pins
 	uint8_t current = 0; //current state of bank b
 	//select register
@@ -271,6 +278,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	GPIOA->BRR = (1<<7);
 
 
 
@@ -788,7 +796,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
@@ -800,8 +808,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA7 PA8 PA15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15;
+  /*Configure GPIO pins : PA6 PA7 PA8 PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

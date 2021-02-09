@@ -228,7 +228,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-
+	GPIOA->BSRR = 1<<6;
 	for(int i = 0; i < 4; i++){ //BAM all 4 LED's
 
 		if(brightness[i] & (1 << BAMIndex)){
@@ -271,6 +271,7 @@ void TIM2_IRQHandler(void)
 		BAMIndex++;
 		TIM2->PSC = TIM2->PSC << 1; //set next write to occupy twice the time of this current write.
 	}
+	GPIOA->BRR = 1<<6;
   /* USER CODE END TIM2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim2);
   /* USER CODE BEGIN TIM2_IRQn 1 */
