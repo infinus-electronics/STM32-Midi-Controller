@@ -59,6 +59,10 @@ volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past
 volatile uint8_t encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
+uint8_t currentBankB = 0; //current state of bank B of the LCD MCP23017
+
+
+
 
 /* USER CODE END PV */
 
@@ -89,7 +93,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 /* USER CODE BEGIN 0 */
 
 void debug(){
-	GPIOA->BSRR = (1<<7); //hmm apparently it doesn't work with brackets
+	GPIOA->BSRR = (1<<7);
 	GPIOA->BRR = (1<<7);
 }
 
@@ -143,6 +147,7 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
+	GPIOA->BSRR = (1<<7);
 	//__disable_irq();
 	//TODO: just store the state instead of reading it to save time
 	//first, read current state of Bank B so we can safely toggle pins
@@ -214,6 +219,8 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	__enable_irq();
+
+	GPIOA->BRR = (1<<7);
 
 }
 
