@@ -157,6 +157,7 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	//write out the new state
 	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
+	//TODO: investigate what happens if we disable irq, since the blocking code is already in place
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -180,7 +181,7 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	TIM2->CR1 |= 1; //enable BAM Driver
-
+	//__enable_irq();
 	GPIOA->BRR = (1<<7);
 
 }
@@ -719,7 +720,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 511;
+  htim2.Init.Period = 2047;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
