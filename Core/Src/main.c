@@ -51,15 +51,15 @@ I2C_HandleTypeDef hi2c2;
 TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
-uint8_t brightness[4] = {1,1,1,1}; //initialize array holding brightness values for the 4 indicator LED's
-uint8_t BAMIndex = 0;
+volatile uint8_t brightness[4] = {1,1,1,1}; //initialize array holding brightness values for the 4 indicator LED's
+volatile uint8_t BAMIndex = 0;
 
-uint8_t currentEncoder = 0; //which encoder are we polling right now?
-uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
-uint8_t encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
-int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
+volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
+volatile uint8_t encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
+volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
-uint8_t current;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +87,11 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void debug(){
+	GPIOA->BSRR = (1<<7);
+	GPIOA->BRR = (1<<7);
+}
 
 /* DWT based delay */
 uint32_t DWT_Delay_Init(void)
@@ -136,75 +141,80 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 
 /* MCP23017 Defines */
 
-void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
+void __attribute__((optimize("O0"))) MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
+	//__disable_irq();
+	debug();
+	debug();
+	debug();
 	//first, read current state of Bank B so we can safely toggle pins
-	current = 0; //current state of bank b
+	uint8_t current = 0; //current state of bank b
 	//select register
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
+	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((volatile uint32_t)(I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	if(b==A){
 		I2C2->DR = 0x12; //read from bank A
 	}
 	else{
 		I2C2->DR = 0x13;
 	}
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
+	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 	//read in register contents
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
+	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr | 1; //address the MCP23017 and READ from it
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
 	if(I2C2->SR2); //read I2C SR2, Note: Can't check for busyness, results in spurious extra byte read
 	I2C2->CR1 &= ~(1 << 10); //Disable ACK and
 	I2C2->CR1 |= (1 << 9); //queue stop condition here (Just after EV6)
-	while ((I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
 	current = I2C2->DR; //read current state of Bank B
 	I2C2->CR1 |= (1<<10); //Re-enable ACK
 
-	//TODO: investigate this crap
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
+
+	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 
 	current |= (1<<pin);
 
+	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames
 	//write out the new state
 	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
+	while ((volatile uint32_t)(I2C2->SR1 & 1) == 0) debug(); //clear SB
 	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((volatile uint32_t)(I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	if(b==A){
 		I2C2->DR = 0x14;
 	}
 	else{
 		I2C2->DR = 0x15;
 	}
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = current; //just pull everything low
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((volatile uint32_t)(I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
-
+	while ((volatile uint32_t)(I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	//__enable_irq();
 
 }
 
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
 	//first, read current state of Bank B so we can safely toggle pins
-	current = 0; //current state of bank b
+	uint8_t current = 0; //current state of bank b
 	//select register
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -222,7 +232,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 	//read in register contents
 
@@ -237,7 +247,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	current = I2C2->DR; //read current state of Bank B
 	I2C2->CR1 |= (1<<10); //Re-enable ACK
 
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 	current &= ~(1<<pin);
 
@@ -260,7 +270,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((I2C2->SR2 & (1<<1)) == 0); //make damn sure the I2C bus is free
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 
 
 
@@ -318,12 +328,10 @@ void LCDInit(uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	LCDData(0x00, addr); //clear the data pins as well
 	DWT_Delay_ms(30);
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	LCDCommand(0x30, addr); //function set
 	DWT_Delay_ms(5);
 
@@ -374,17 +382,13 @@ void LCDData(char data, uint8_t addr){
 
 void LCDCommand(char data, uint8_t addr){
 
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	MCP23017ClearPin(RS_Pin, B, addr);
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	LCDData(data, addr);
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	LCDCycleEN(addr);
-	GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 }
 
 void LCDCycleEN(uint8_t addr){
@@ -493,20 +497,31 @@ int main(void)
 
   I2C2->CR1 |= 1; //enable i2c 2 peripheral for LCD and EEPROM
 
-  GPIOA->BSRR = (1<<7);
-  	GPIOA->BRR = (1<<7);
-  LCDInit(LCD_Address);
-  GPIOA->BSRR = (1<<7);
-  	GPIOA->BRR = (1<<7);
-  LCDClear(LCD_Address);
-  GPIOA->BSRR = (1<<7);
-  	GPIOA->BRR = (1<<7);
-  LCDSetCursor(1, 1, LCD_Address);
-  GPIOA->BSRR = (1<<7);
-  	GPIOA->BRR = (1<<7);
-  LCDWriteString("AAAA", LCD_Address);
-  GPIOA->BSRR = (1<<7);
-  	GPIOA->BRR = (1<<7);
+  //Initialise the MCP23017 first
+  	I2C2->CR1 |= (1<<8); //send start condition
+  	while ((I2C2->SR1 & 1) == 0); //clear SB
+  	I2C2->DR = LCD_Address; //address the MCP23017
+  	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+  	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  	I2C2->DR = 0x00; //write to IODIR_A
+  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  	I2C2->DR = 0x00; //all outputs
+  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  	I2C2->DR = 0x00; //all outputs for next address which is IODIR_B
+  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+  	I2C2->CR1 |= (1<<9); //send stop condition
+
+
+  //LCDInit(LCD_Address);
+
+  //LCDClear(LCD_Address);
+
+  //LCDSetCursor(1, 1, LCD_Address);
+
+  //LCDWriteString("AAAA", LCD_Address);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -516,21 +531,21 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	  brightness[0] = encoderValues[3];
 	  brightness[1] = encoderValues[2];
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
-	  GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+
 	  //LCDShiftLeft(LCD_Address);
-	  DWT_Delay_ms(5);
-	  GPIOA->BSRR = (1<<7);
-	  	GPIOA->BRR = (1<<7);
+	  DWT_Delay_us(500);
+	  MCP23017SetPin(0, B, LCD_Address);
+	  //MCP23017ClearPin(0, B, LCD_Address);
+
+
 	  //LCDShiftRight(LCD_Address);
 	  //DWT_Delay_ms(500);
-	  LCDCycleEN(LCD_Address);
+	  //LCDCycleEN(LCD_Address);
 
 
   }
