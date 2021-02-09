@@ -44,13 +44,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern uint8_t brightness[4];
-extern uint8_t BAMIndex;
+extern volatile uint8_t brightness[4];
+extern volatile uint8_t BAMIndex;
 
-extern uint8_t currentEncoder;
-extern uint8_t lastEncoder[5];
-extern int8_t encoderLUT[16];
-extern uint8_t encoderValues[5];
+extern volatile uint8_t currentEncoder;
+extern volatile uint8_t lastEncoder[5];
+extern volatile int8_t encoderLUT[16];
+extern volatile uint8_t encoderValues[5];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -229,18 +229,31 @@ void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
 	GPIOA->BSRR = 1<<6;
+
+
+	if(brightness[0] & (1 << BAMIndex))	GPIOB->BSRR = (1<<12);
+	else GPIOB->BRR = (1<<12);
+	if(brightness[1] & (1 << BAMIndex))	GPIOB->BSRR = (1<<13);
+	else GPIOB->BRR = (1<<13);
+	if(brightness[2] & (1 << BAMIndex))	GPIOB->BSRR = (1<<14);
+	else GPIOB->BRR = (1<<14);
+	if(brightness[3] & (1 << BAMIndex))	GPIOB->BSRR = (1<<15);
+	else GPIOB->BRR = (1<<15);
+	/*
 	for(int i = 0; i < 4; i++){ //BAM all 4 LED's
 
 		if(brightness[i] & (1 << BAMIndex)){
 			GPIOB->BSRR = (1<<(i+12));
 		}
 		else{
-			GPIOB->BRR = (1<<(i+12));
+			GPIOB->BSRR = (1<<(i+12))
 		}
 
 	}
-
+*/
 	if(BAMIndex == 7){ //We've passed one BAM cycle
+
+
 		BAMIndex = 0;
 		TIM2->PSC = 1;
 
@@ -264,12 +277,12 @@ void TIM2_IRQHandler(void)
 		GPIOC->BRR = (3<<13); //clear GPIO Pins
 		GPIOC->BSRR = ((currentEncoder&3)<<13);
 		GPIOA->BRR = (1<<15);
-		GPIOA->BSRR = ((currentEncoder&4)<<13);
+		if(currentEncoder&4) GPIOA->BSRR = (1<<15); //BLOODY SOLDER DAG!!! Shorted out the pins giving the result in DS14
 
 	}
 	else{
 		BAMIndex++;
-		TIM2->PSC = TIM2->PSC << 1; //set next write to occupy twice the time of this current write.
+		TIM2->PSC = (volatile)(TIM2->PSC << 1); //set next write to occupy twice the time of this current write.
 	}
 	GPIOA->BRR = 1<<6;
   /* USER CODE END TIM2_IRQn 0 */
