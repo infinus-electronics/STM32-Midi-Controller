@@ -46,6 +46,7 @@
 /* USER CODE BEGIN PV */
 extern volatile uint8_t brightness[4];
 extern volatile uint8_t BAMIndex;
+extern volatile uint8_t blocked;
 
 extern volatile uint8_t currentEncoder;
 extern volatile uint8_t lastEncoder[5];
@@ -230,7 +231,7 @@ void TIM2_IRQHandler(void)
   /* USER CODE BEGIN TIM2_IRQn 0 */
 	GPIOA->BSRR = 1<<6;
 
-
+	/* 2.12us
 	if(brightness[0] & (1 << BAMIndex))	GPIOB->BSRR = (1<<12);
 	else GPIOB->BRR = (1<<12);
 	if(brightness[1] & (1 << BAMIndex))	GPIOB->BSRR = (1<<13);
@@ -239,6 +240,14 @@ void TIM2_IRQHandler(void)
 	else GPIOB->BRR = (1<<14);
 	if(brightness[3] & (1 << BAMIndex))	GPIOB->BSRR = (1<<15);
 	else GPIOB->BRR = (1<<15);
+	*/
+
+
+	//this new routine 2.16us :/
+	GPIOB->BRR = (0b1111 << 12);
+	GPIOB->BSRR = ((brightness[0] & (1 << BAMIndex)) << (12 - BAMIndex) | (brightness[1] & (1 << BAMIndex)) << (13 - BAMIndex) | (brightness[2] & (1 << BAMIndex)) << (14 - BAMIndex) | (brightness[3] & (1 << BAMIndex)) << (15 - BAMIndex));
+
+	GPIOA->BRR = 1<<6;
 	/*
 	for(int i = 0; i < 4; i++){ //BAM all 4 LED's
 
@@ -250,12 +259,20 @@ void TIM2_IRQHandler(void)
 		}
 
 	}
+
+
 */
+
+	//FIXME this might potentially cause issues, as it blocks for half of the time
+	if(BAMIndex == 4) blocked = 0; //Time sensitive LSB's are done, unblock, value of 3 or less gives visible flicker
+
+
 	if(BAMIndex == 7){ //We've passed one BAM cycle
 
 
 		BAMIndex = 0;
 		TIM2->PSC = 1;
+		blocked = 1; //block to protect the time sensitive LSB's, otherwise it gets pretty flicker-ry
 
 
 
@@ -284,7 +301,7 @@ void TIM2_IRQHandler(void)
 		BAMIndex++;
 		TIM2->PSC = (volatile)(TIM2->PSC << 1); //set next write to occupy twice the time of this current write.
 	}
-	GPIOA->BRR = 1<<6;
+
   /* USER CODE END TIM2_IRQn 0 */
   HAL_TIM_IRQHandler(&htim2);
   /* USER CODE BEGIN TIM2_IRQn 1 */

@@ -53,6 +53,7 @@ TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN PV */
 volatile uint8_t brightness[4] = {1,1,1,1}; //initialize array holding brightness values for the 4 indicator LED's
 volatile uint8_t BAMIndex = 0;
+volatile uint8_t blocked = 0; //time critical BAM code running, do not disable interrupts
 
 volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
@@ -514,7 +515,7 @@ int main(void)
 
 	  //LCDShiftLeft(LCD_Address);
 	  DWT_Delay_us(500);
-	  MCP23017SetPin(0, B, LCD_Address);
+	  if (!blocked) MCP23017SetPin(0, B, LCD_Address); //spam if not blocked
 	  //MCP23017ClearPin(0, B, LCD_Address);
 
 
