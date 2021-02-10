@@ -144,6 +144,8 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 
 //https://deepbluembedded.com/stm32-delay-microsecond-millisecond-utility-dwt-delay-timer-delay/
 
+
+
 /* MCP23017 Defines */
 
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
@@ -158,6 +160,8 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
 	//TODO: investigate what happens if we disable irq, since the blocking code is already in place
+
+
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -189,48 +193,21 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
 	GPIOA->BSRR = (1<<7);
-	//first, read current state of Bank B so we can safely toggle pins
-	uint8_t current = 0; //current state of bank b
-	//select register
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	if(b==A){
-		I2C2->DR = 0x12; //read from bank A
-	}
-	else{
-		I2C2->DR = 0x13;
-	}
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
 
-	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
-
-	//read in register contents
-
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr | 1; //address the MCP23017 and READ from it
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	if(I2C2->SR2); //read I2C SR2 Note: Can't check for busyness, results in spurious extra byte read
-	I2C2->CR1 &= ~(1 << 10); //Disable ACK and
-	I2C2->CR1 |= (1 << 9); //queue stop condition here (Just after EV6)
-	while ((I2C2->SR1 & (1<<6)) == 0); //while RxNE is low, ie data is still being read
-	current = I2C2->DR; //read current state of Bank B
-	I2C2->CR1 |= (1<<10); //Re-enable ACK
-
-	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
-
-	current &= ~(1<<pin);
-
+	currentIOState[b] &= ~(1<<pin);
+	//Note that all the I2C pointers are already volatile
+	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames. It looks like the interrupt routine is plenty fast when compared to a full byte transfer, but just too long to squeeze into a start condition. YUP, CONFIRMED THAT IT GETS STUCK WAITING FOR THE ADDRESS FLAG, IE the address flag is not set!
 	//write out the new state
+	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
+	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
+	//TODO: investigate what happens if we disable irq, since the blocking code is already in place
+
+
+	TIM2->CR1 &= ~1; //disable BAM Driver
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
+	//__enable_irq(); didn't work here
 	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
 	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
@@ -241,15 +218,14 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 		I2C2->DR = 0x15;
 	}
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = current; //just pull everything low
+	I2C2->DR = currentIOState[b]; //just pull everything low
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
-
-	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+		while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	TIM2->CR1 |= 1; //enable BAM Driver
+	//__enable_irq();
 	GPIOA->BRR = (1<<7);
-
-
 
 }
 
@@ -516,7 +492,12 @@ int main(void)
 
 	  //LCDShiftLeft(LCD_Address);
 	  DWT_Delay_us(500);
-	  if (!blocked) MCP23017SetPin(0, B, LCD_Address); //spam if not blocked
+
+
+	  while(blocked); //wait for unblock
+	  MCP23017SetPin(0, B, LCD_Address); //spam if not blocked
+	  while(blocked); //wait for unblock
+	  MCP23017ClearPin(0, B, LCD_Address); //spam if not blocked
 	  //MCP23017ClearPin(0, B, LCD_Address);
 
 
