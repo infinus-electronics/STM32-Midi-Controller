@@ -47,8 +47,10 @@ ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
+DMA_HandleTypeDef hdma_i2c1_tx;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 volatile uint8_t brightness[4] = {1,1,1,1}; //initialize array holding brightness values for the 4 indicator LED's
@@ -57,23 +59,25 @@ volatile uint8_t blocked = 0; //time critical BAM code running, do not disable i
 
 volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
-volatile uint8_t encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
+volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
 uint8_t currentIOState[2] = {0, 0}; //current state of the LCD MCP23017
 
-
-
+uint8_t LEDMatrix[4] = {0b10101010, 0b01010101, 0b11110000, 0b00001111}; //current state of the LED Matrix per row
+uint8_t
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 void LCDCommand(char data, uint8_t addr);
@@ -158,12 +162,12 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	//Note that all the I2C pointers are already volatile
 	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames. It looks like the interrupt routine is plenty fast when compared to a full byte transfer, but just too long to squeeze into a start condition. YUP, CONFIRMED THAT IT GETS STUCK WAITING FOR THE ADDRESS FLAG, IE the address flag is not set!
 	//write out the new state
-	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
+	//UPDATE: This messes up the BAM Driver because it causes the BAM to skip entire steps... its better just to pause TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
 
 
-
 	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -186,6 +190,7 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	TIM2->CR1 |= 1; //enable BAM Driver
+	TIM3->CR1 |= 1;
 	//__enable_irq();
 	GPIOA->BRR = (1<<7);
 
@@ -205,6 +210,8 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
+
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -223,8 +230,9 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
-		while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	TIM2->CR1 |= 1; //enable BAM Driver
+	TIM3->CR1 |= 1;
 	//__enable_irq();
 	GPIOA->BRR = (1<<7);
 
@@ -255,7 +263,7 @@ void LCDInit(uint8_t addr){ //interrupts should be disabled here
 	//while(blocked); //wait for clearance anyways just for good measure
 
 	//Initialise the MCP23017 first
-	__disable_irq();
+	__disable_irq(); //let's allow the init to go down peacefully
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -317,6 +325,7 @@ void LCDData(char data, uint8_t addr){
 	while(blocked); //wait for clearance
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
 
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -332,7 +341,7 @@ void LCDData(char data, uint8_t addr){
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 	TIM2->CR1 |= 1; //enable BAM Driver
-
+	TIM3->CR1 |= 1;
 
 }
 
@@ -440,15 +449,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USB_DEVICE_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
+  NVIC_SetPriorityGrouping(0U); //use standard interrupt grouping
   DWT_Delay_Init();
 
   blocked = 0;
@@ -457,32 +469,14 @@ int main(void)
   LCDInit(LCD_Address);
 
   TIM2->CR1 |= 1; //enable BAM Driver
-
-  /*
-  //Initialise the MCP23017 first
-  	I2C2->CR1 |= (1<<8); //send start condition
-  	while ((I2C2->SR1 & 1) == 0); //clear SB
-  	I2C2->DR = LCD_Address; //address the MCP23017
-  	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-  	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-  	I2C2->DR = 0x00; //write to IODIR_A
-  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-  	I2C2->DR = 0x00; //all outputs
-  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-  	I2C2->DR = 0x00; //all outputs for next address which is IODIR_B
-  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-  	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
-  	I2C2->CR1 |= (1<<9); //send stop condition
-	*/
-
+  TIM3->CR1 |= 1; //enable encoder scan driver
 
 
   LCDClear(LCD_Address);
 
   LCDSetCursor(1, 1, LCD_Address);
 
-  LCDWriteString("AAAA\x00", LCD_Address);
+  LCDWriteString("AAAA", LCD_Address);
 
   /* USER CODE END 2 */
 
@@ -499,10 +493,11 @@ int main(void)
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
 
-	  LCDShiftLeft(LCD_Address);
-	  DWT_Delay_ms(500);
-	  LCDShiftRight(LCD_Address);
-	  DWT_Delay_ms(500);
+
+	  //LCDShiftLeft(LCD_Address);
+	  //DWT_Delay_ms(500);
+	  //LCDShiftRight(LCD_Address);
+	  //DWT_Delay_ms(500);
 	  //LCDCycleEN(LCD_Address);
 
 
@@ -563,8 +558,11 @@ void SystemClock_Config(void)
 static void MX_NVIC_Init(void)
 {
   /* TIM2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(TIM2_IRQn);
+  /* TIM3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(TIM3_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
 }
 
 /**
@@ -724,6 +722,68 @@ static void MX_TIM2_Init(void)
   TIM2->DIER |= 1; //Update interrupt enable
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 16383;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+  TIM3->CR1 &= ~(1<<1); //Clear the UDIS bit to ensure the Encoder Scan Interrupt is triggered
+  TIM3->DIER |= 1; //Update interrupt enable
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
 
 }
 

@@ -51,7 +51,7 @@ extern volatile uint8_t blocked;
 extern volatile uint8_t currentEncoder;
 extern volatile uint8_t lastEncoder[5];
 extern volatile int8_t encoderLUT[16];
-extern volatile uint8_t encoderValues[5];
+extern volatile int encoderValues[5];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,7 +66,9 @@ extern volatile uint8_t encoderValues[5];
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
+extern DMA_HandleTypeDef hdma_i2c1_tx;
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -210,6 +212,22 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles DMA1 channel6 global interrupt.
+  */
+void DMA1_Channel6_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel6_IRQn 0 */
+
+	I2C1->CR1 |= (1<<9); //generate stop condition
+
+	/* USER CODE END DMA1_Channel6_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_i2c1_tx);
+  /* USER CODE BEGIN DMA1_Channel6_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel6_IRQn 1 */
+}
+
+/**
   * @brief This function handles USB low priority or CAN RX0 interrupts.
   */
 void USB_LP_CAN1_RX0_IRQHandler(void)
@@ -232,7 +250,7 @@ void TIM2_IRQHandler(void)
 	//GPIOA->BSRR = 1<<6;
 	if(BAMIndex == 0){
 		blocked = 1; //block to protect the time sensitive LSB's, otherwise it gets pretty flicker-ry
-		GPIOA->BSRR = 1<<6;
+
 	}
 
 	if(brightness[0] & (1 << BAMIndex))	GPIOB->BSRR = (1<<12);
@@ -278,7 +296,7 @@ void TIM2_IRQHandler(void)
 	//FIXME this might potentially cause issues, as it blocks for half of the time
 	if(BAMIndex == 3){
 		blocked = 0; //Time sensitive LSB's are done, unblock, value of 3 or less gives visible flicker
-		GPIOA->BRR = 1<<6;
+
 	}
 
 	if(BAMIndex == 7){ //We've passed one BAM cycle
@@ -288,26 +306,6 @@ void TIM2_IRQHandler(void)
 		TIM2->PSC = 1;
 
 
-
-		uint8_t currentReadoff = ((((GPIOA->IDR)>>9) & 1) << 1) | (((GPIOA->IDR)>>10) & 1); //read current encoder state
-		uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
-		encoderValues[currentEncoder] += encoderLUT[index];
-		lastEncoder[currentEncoder] = currentReadoff;
-
-		//if(currentEncoder == 0){
-		//uint8_t buffer[256];
-		//sprintf(buffer, "currentReadoff %d index %d encoderValue %d\r\n", currentReadoff, index, encoderValues[0]);
-		//CDC_Transmit_FS(buffer, sizeof(buffer));
-		//}
-
-		if(currentEncoder == 4) currentEncoder = 0;
-		else currentEncoder++;
-
-		//select the nth encoder here to allow the mux time to settle
-		GPIOC->BRR = (3<<13); //clear GPIO Pins
-		GPIOC->BSRR = ((currentEncoder&3)<<13);
-		GPIOA->BRR = (1<<15);
-		if(currentEncoder&4) GPIOA->BSRR = (1<<15); //BLOODY SOLDER DAG!!! Shorted out the pins giving the result in DS14
 
 	}
 	else{
@@ -320,6 +318,47 @@ void TIM2_IRQHandler(void)
   /* USER CODE BEGIN TIM2_IRQn 1 */
 
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+
+	GPIOA->BSRR = 1<<6;
+	uint8_t currentReadoff = ((((GPIOA->IDR)>>9) & 1) << 1) | (((GPIOA->IDR)>>10) & 1); //read current encoder state
+	uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
+	encoderValues[currentEncoder] += encoderLUT[index];
+
+	//constrain encoderValues
+	if(encoderValues[currentEncoder] > 255) encoderValues[currentEncoder] = 255;
+	if(encoderValues[currentEncoder] < 0) encoderValues[currentEncoder] = 0;
+
+	lastEncoder[currentEncoder] = currentReadoff;
+
+	//if(currentEncoder == 0){
+	//uint8_t buffer[256];
+	//sprintf(buffer, "currentReadoff %d index %d encoderValue %d\r\n", currentReadoff, index, encoderValues[0]);
+	//CDC_Transmit_FS(buffer, sizeof(buffer));
+	//}
+
+	if(currentEncoder == 4) currentEncoder = 0;
+	else currentEncoder++;
+
+	//select the nth encoder here to allow the mux time to settle
+	GPIOC->BRR = (3<<13); //clear GPIO Pins
+	GPIOC->BSRR = ((currentEncoder&3)<<13);
+	GPIOA->BRR = (1<<15);
+	if(currentEncoder&4) GPIOA->BSRR = (1<<15); //BLOODY SOLDER DAG!!! Shorted out the pins giving the result in DS14
+
+	GPIOA->BRR = 1<<6;
+  /* USER CODE END TIM3_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim3);
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

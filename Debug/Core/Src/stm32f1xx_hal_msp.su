@@ -4,4 +4,4 @@ stm32f1xx_hal_msp.c:125:6:HAL_ADC_MspDeInit	16	static
 stm32f1xx_hal_msp.c:156:6:HAL_I2C_MspInit	56	static
 stm32f1xx_hal_msp.c:214:6:HAL_I2C_MspDeInit	16	static
 stm32f1xx_hal_msp.c:265:6:HAL_TIM_Base_MspInit	24	static
-stm32f1xx_hal_msp.c:287:6:HAL_TIM_Base_MspDeInit	16	static
+stm32f1xx_hal_msp.c:298:6:HAL_TIM_Base_MspDeInit	16	static
