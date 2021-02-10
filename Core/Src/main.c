@@ -150,6 +150,7 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
+	while(blocked); //wait for clearance
 	GPIOA->BSRR = (1<<7);
 
 	currentIOState[b] |= (1<<pin);
@@ -159,7 +160,7 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	//write out the new state
 	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
-	//TODO: investigate what happens if we disable irq, since the blocking code is already in place
+
 
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
@@ -192,6 +193,7 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
+	while(blocked); //wait for clearance
 	GPIOA->BSRR = (1<<7);
 
 	currentIOState[b] &= ~(1<<pin);
@@ -200,7 +202,6 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	//write out the new state
 	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
-	//TODO: investigate what happens if we disable irq, since the blocking code is already in place
 
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
@@ -249,9 +250,12 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
  *
  * @param addr Address of the MCP23017
  */
-void LCDInit(uint8_t addr){
+void LCDInit(uint8_t addr){ //interrupts should be disabled here
+
+	//while(blocked); //wait for clearance anyways just for good measure
 
 	//Initialise the MCP23017 first
+	__disable_irq();
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -267,19 +271,12 @@ void LCDInit(uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
+
 	//Pull RS, RW and E pins LOW
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x15; //write to OLAT_B
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x00; //just pull everything low
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
+	MCP23017ClearPin(RS_Pin, B, LCD_Address);
+	MCP23017ClearPin(RS_Pin, B, LCD_Address);
+	MCP23017ClearPin(RS_Pin, B, LCD_Address);
+
 
 
 	LCDData(0x00, addr); //clear the data pins as well
@@ -296,14 +293,14 @@ void LCDInit(uint8_t addr){
 
 	LCDCommand(0x38, addr); //8-bit mode, 2 lines, smaller font
 
-	LCDCommand(0x08, addr); //display off
+	LCDCommand(0x0C, addr); //display ON
 
 	LCDCommand(0x01, addr); //display clear
 	DWT_Delay_us(2000); //clear requires a substantial delay
 
 	LCDCommand(0x06, addr); //set entry mode
 
-
+	__enable_irq();
 
 
 }
@@ -317,6 +314,10 @@ void LCDInit(uint8_t addr){
  */
 void LCDData(char data, uint8_t addr){
 
+	while(blocked); //wait for clearance
+
+	TIM2->CR1 &= ~1; //disable BAM Driver
+
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -329,6 +330,8 @@ void LCDData(char data, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
+
+	TIM2->CR1 |= 1; //enable BAM Driver
 
 
 }
@@ -366,7 +369,7 @@ void LCDWriteChar(char data, uint8_t addr){
 
 void LCDWriteString(char *str, uint8_t addr){
 
-	for(int i = 0; str[i]!= '\x00'; i++){ //Nice touch: take advantage of null byte terminated strings
+	for(int i = 0; (volatile char)str[i] != '\x00' ; i++){ //Nice touch: take advantage of null byte terminated strings
 		LCDWriteChar(str[i], addr);
 	}
 
@@ -448,8 +451,14 @@ int main(void)
   /* USER CODE BEGIN 2 */
   DWT_Delay_Init();
 
+  blocked = 0;
   I2C2->CR1 |= 1; //enable i2c 2 peripheral for LCD and EEPROM
 
+  LCDInit(LCD_Address);
+
+  TIM2->CR1 |= 1; //enable BAM Driver
+
+  /*
   //Initialise the MCP23017 first
   	I2C2->CR1 |= (1<<8); //send start condition
   	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -465,15 +474,15 @@ int main(void)
   	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
   	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
   	I2C2->CR1 |= (1<<9); //send stop condition
+	*/
 
 
-  //LCDInit(LCD_Address);
 
-  //LCDClear(LCD_Address);
+  LCDClear(LCD_Address);
 
-  //LCDSetCursor(1, 1, LCD_Address);
+  LCDSetCursor(1, 1, LCD_Address);
 
-  //LCDWriteString("AAAA", LCD_Address);
+  LCDWriteString("AAAA\x00", LCD_Address);
 
   /* USER CODE END 2 */
 
@@ -490,19 +499,10 @@ int main(void)
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
 
-	  //LCDShiftLeft(LCD_Address);
-	  DWT_Delay_us(500);
-
-
-	  while(blocked); //wait for unblock
-	  MCP23017SetPin(0, B, LCD_Address); //spam if not blocked
-	  while(blocked); //wait for unblock
-	  MCP23017ClearPin(0, B, LCD_Address); //spam if not blocked
-	  //MCP23017ClearPin(0, B, LCD_Address);
-
-
-	  //LCDShiftRight(LCD_Address);
-	  //DWT_Delay_ms(500);
+	  LCDShiftLeft(LCD_Address);
+	  DWT_Delay_ms(500);
+	  LCDShiftRight(LCD_Address);
+	  DWT_Delay_ms(500);
 	  //LCDCycleEN(LCD_Address);
 
 
@@ -722,7 +722,7 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
   TIM2->CR1 &= ~(1<<1); //Clear the UDIS bit to ensure the BAM Interrupt is triggered
   TIM2->DIER |= 1; //Update interrupt enable
-  TIM2->CR1 |= 1; //enable BAM Driver
+
   /* USER CODE END TIM2_Init 2 */
 
 }
