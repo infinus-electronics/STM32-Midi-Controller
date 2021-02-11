@@ -335,7 +335,7 @@ void TIM2_IRQHandler(void)
 */
 
 	//FIXME this might potentially cause issues, as it blocks for half of the time
-	if(BAMIndex == 3){
+	if(BAMIndex == 5){
 		blocked = 0; //Time sensitive LSB's are done, unblock, value of 3 or less gives visible flicker
 
 	}
@@ -345,7 +345,7 @@ void TIM2_IRQHandler(void)
 
 		BAMIndex = 0;
 		TIM2->PSC = 1;
-		LEDMatrixNextFrame(LEDMatrix_Address);
+		LEDMatrixNextRow(LEDMatrix_Address);
 
 
 
@@ -412,18 +412,19 @@ void I2C1_EV_IRQHandler(void)
 
 	//hmmm it got stuck in here... coz im an idiot...
 
-	//note: time to transfer 4 packets at this speed is about 382 us
+	//note: time to transfer 4 packets at this speed is about 100 us
 
 
 
 	GPIOA->BSRR = 1<<7;
 	if(I2C1->SR1 & (1<<2)){ //BTF is set
 
-		//might have to move this to the DMA isr
 		I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
+		I2C1->CR1 |= (1<<9); //send stop condition
+		blocked = 0; //give clearance for other blocking operations
 
 		//reconfigure the DMA
-		if(DMA1->ISR & (1<<21)){ //channel 6 transfer complete
+	/*	if(DMA1->ISR & (1<<21)){ //channel 6 transfer complete
 
 
 			DMA1_Channel6->CCR &= ~1; //disable DMA1 Channel 6 for reconfiguring
@@ -460,7 +461,7 @@ void I2C1_EV_IRQHandler(void)
 
 				I2C1->CR2 |= (1<<11); //enable DMA Requests
 			}
-		}
+		}*/
 	}
 
   /* USER CODE END I2C1_EV_IRQn 0 */
