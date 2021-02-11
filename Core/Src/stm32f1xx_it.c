@@ -52,6 +52,7 @@ extern volatile uint8_t currentEncoder;
 extern volatile uint8_t lastEncoder[5];
 extern volatile int8_t encoderLUT[16];
 extern volatile int encoderValues[5];
+extern volatile uint8_t encoderChanged[5];
 
 extern volatile uint8_t currentLEDRow;
 extern uint8_t LEDMatrixBuffer[];
@@ -373,6 +374,7 @@ void TIM3_IRQHandler(void)
 	uint8_t currentReadoff = ((((GPIOA->IDR)>>9) & 1) << 1) | (((GPIOA->IDR)>>10) & 1); //read current encoder state
 	uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
 	encoderValues[currentEncoder] += encoderLUT[index];
+	encoderChanged[currentEncoder] = encoderLUT[index];
 
 	//constrain encoderValues
 	if(encoderValues[currentEncoder] > 255) encoderValues[currentEncoder] = 255;

@@ -62,6 +62,7 @@ volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
 volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
 
 uint8_t currentIOState[2] = {0, 0}; //current state of the LCD MCP23017
 
@@ -576,10 +577,19 @@ int main(void)
 	  brightness[3] = encoderValues[0];
 
 
-	  LCDShiftLeft(LCD_Address);
-	  DWT_Delay_ms(500);
-	  LCDShiftRight(LCD_Address);
-	  DWT_Delay_ms(500);
+	  for(int i = 0; i < 5; i++){
+		  if(encoderChanged[i]){
+			  char buffer[17] = "";
+			  LCDSetCursor(1,1, LCD_Address);
+			  snprintf(buffer, 16, "Encoder %d", i);
+			  LCDWriteString(buffer, LCD_Address);
+			  LCDSetCursor(2,1, LCD_Address);
+			  snprintf(buffer, 16, "%15d", encoderValues[i]);
+			  LCDWriteString(buffer, LCD_Address);
+			  break;
+
+		  }
+	  }
 	  //LCDCycleEN(LCD_Address);
 
 
