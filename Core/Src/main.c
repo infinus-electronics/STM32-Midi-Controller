@@ -35,6 +35,7 @@ typedef enum bank {A, B} bank;
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define LCD_Address 0b01001110
+#define LEDMatrix_Address 0b01001000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,8 +66,8 @@ volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -
 uint8_t currentIOState[2] = {0, 0}; //current state of the LCD MCP23017
 
 uint8_t LEDMatrix[4] = {0b10101010, 0b01010101, 0b11110000, 0b00001111}; //current state of the LED Matrix per row
-uint8_t
-
+uint8_t LEDMatrixBuffer[12];
+volatile uint8_t currentLEDRow = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,6 +93,9 @@ void LCDShiftRight(uint8_t addr);
 void LCDShiftLeft(uint8_t addr);
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t address);
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
+
+void LEDMatrixInit(uint8_t addr);
+void LEDMatrixStart(uint8_t addr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -155,7 +159,7 @@ __STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	while(blocked); //wait for clearance
-	GPIOA->BSRR = (1<<7);
+	//GPIOA->BSRR = (1<<7);
 
 	currentIOState[b] |= (1<<pin);
 
@@ -185,21 +189,21 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = currentIOState[b]; //just pull everything low
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 	//__enable_irq();
-	GPIOA->BRR = (1<<7);
+	//GPIOA->BRR = (1<<7);
 
 }
 
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
 	while(blocked); //wait for clearance
-	GPIOA->BSRR = (1<<7);
+	//GPIOA->BSRR = (1<<7);
 
 	currentIOState[b] &= ~(1<<pin);
 	//Note that all the I2C pointers are already volatile
@@ -208,6 +212,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
 	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
 
+	//potential issue: the other interrupts may cause this crap to fail again...
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	TIM3->CR1 &= ~1;
@@ -228,16 +233,67 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = currentIOState[b]; //just pull everything low
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 	//__enable_irq();
-	GPIOA->BRR = (1<<7);
+	//GPIOA->BRR = (1<<7);
 
 }
 
+void LEDMatrixInit(uint8_t addr){
+
+
+	//note: BTF clearing and stop generation are handled by the Event Interrupt
+	__disable_irq();
+
+
+
+	I2C1->CR1 |= (1<<8); //send start condition
+	while ((I2C1->SR1 & 1) == 0); //clear SB
+	I2C1->DR = addr; //address the MCP23017
+	while ((I2C1->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C1->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C1->DR = 0x00; //write to IODIR_A
+	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C1->DR = 0x00; //all outputs
+	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C1->DR = 0x00; //all outputs for next address which is IODIR_B
+	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	//while ((I2C1->SR1 & (1<<2)) == 0); //make sure BTF is 1
+	I2C1->CR1 |= (1<<9); //send stop condition
+	__enable_irq();
+
+}
+
+void LEDMatrixStart(uint8_t addr){
+
+	while(blocked); //just so nothing stupid happens
+
+
+	DMA1_Channel6->CMAR = (uint32_t)LEDMatrixBuffer;
+	DMA1_Channel6->CPAR = (uint32_t)&(I2C1->DR);
+	DMA1_Channel6->CNDTR = 3;
+	DMA1_Channel6->CCR |= (0b11<<12); //High Priority
+	DMA1_Channel6->CCR |= (1<<4 | 1<<7); //set MINC and Read from Memory
+	//DMA1_Channel6->CCR |= (1<<1); //enable transfer complete interrupt
+
+	DMA1_Channel6->CCR |= 1; //activate DMA
+
+	__disable_irq();
+	I2C1->CR2 |= (1<<9); //enable event interrupts
+	I2C1->CR1 |= (1<<8); //send start condition
+	while ((I2C1->SR1 & 1) == 0); //clear SB
+	I2C1->DR = addr; //address the MCP23017
+	I2C1->CR2 |= (1<<11); //enable DMA Requests
+	__enable_irq();
+
+
+
+}
 /* LCD Defines */
 
 /**
@@ -276,7 +332,7 @@ void LCDInit(uint8_t addr){ //interrupts should be disabled here
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = 0x00; //all outputs for next address which is IODIR_B
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 
@@ -337,7 +393,7 @@ void LCDData(char data, uint8_t addr){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = data; //present data at output bank A
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure BTF is 1
+	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 	TIM2->CR1 |= 1; //enable BAM Driver
@@ -465,11 +521,13 @@ int main(void)
 
   blocked = 0;
   I2C2->CR1 |= 1; //enable i2c 2 peripheral for LCD and EEPROM
+  I2C1->CR1 |= 1; //enable i2c 1 peripheral for LED Matrix
 
   LCDInit(LCD_Address);
+  LEDMatrixInit(LEDMatrix_Address);
 
-  TIM2->CR1 |= 1; //enable BAM Driver
-  TIM3->CR1 |= 1; //enable encoder scan driver
+  //TIM2->CR1 |= 1; //enable BAM Driver
+  //TIM3->CR1 |= 1; //enable encoder scan driver
 
 
   LCDClear(LCD_Address);
@@ -477,6 +535,18 @@ int main(void)
   LCDSetCursor(1, 1, LCD_Address);
 
   LCDWriteString("AAAA", LCD_Address);
+
+
+
+  for(int i = 0; i < 4; i++){ //function to drive the LED's
+	  LEDMatrixBuffer[i*3] = 0x14;
+	  LEDMatrixBuffer[i*3+1] = (1<<i);
+	  LEDMatrixBuffer[i*3+2] = LEDMatrix[i];
+  }
+
+  LEDMatrixStart(LEDMatrix_Address);
+
+
 
   /* USER CODE END 2 */
 
@@ -563,6 +633,12 @@ static void MX_NVIC_Init(void)
   /* TIM3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(TIM3_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(TIM3_IRQn);
+  /* DMA1_Channel6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+  /* I2C1_EV_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(I2C1_EV_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
 }
 
 /**
@@ -639,6 +715,9 @@ static void MX_I2C1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN I2C1_Init 2 */
+
+  //dude, the code generation is evil... doesn't help you all the way!!! Came a gutsa so many times....
+
 
   /* USER CODE END I2C1_Init 2 */
 
@@ -779,11 +858,6 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
 
 }
 

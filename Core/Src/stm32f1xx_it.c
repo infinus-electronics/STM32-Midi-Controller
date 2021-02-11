@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define LEDMatrix_Address 0b01001000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,6 +52,9 @@ extern volatile uint8_t currentEncoder;
 extern volatile uint8_t lastEncoder[5];
 extern volatile int8_t encoderLUT[16];
 extern volatile int encoderValues[5];
+
+extern volatile uint8_t currentLEDRow;
+extern uint8_t LEDMatrixBuffer[];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +70,7 @@ extern volatile int encoderValues[5];
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_i2c1_tx;
+extern I2C_HandleTypeDef hi2c1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
@@ -217,13 +221,14 @@ void SysTick_Handler(void)
 void DMA1_Channel6_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel6_IRQn 0 */
+	//GPIOA->BRR = 1<<6;
 
-	I2C1->CR1 |= (1<<9); //generate stop condition
 
-	/* USER CODE END DMA1_Channel6_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel6_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_i2c1_tx);
   /* USER CODE BEGIN DMA1_Channel6_IRQn 1 */
-
+  //GPIOA->BSRR = 1<<6;
   /* USER CODE END DMA1_Channel6_IRQn 1 */
 }
 
@@ -359,6 +364,51 @@ void TIM3_IRQHandler(void)
   /* USER CODE BEGIN TIM3_IRQn 1 */
 
   /* USER CODE END TIM3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles I2C1 event interrupt.
+  */
+void I2C1_EV_IRQHandler(void)
+{
+  /* USER CODE BEGIN I2C1_EV_IRQn 0 */
+
+	//hmmm it got stuck in here... coz im an idiot...
+
+
+
+	GPIOA->BSRR = 1<<7;
+	if(I2C1->SR1 & (1<<2)){ //BTF is set
+
+		//might have to move this to the DMA isr
+		I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
+
+		//reconfigure the DMA
+		if(DMA1->ISR & (1<<21)){ //channel 6 transfer complete
+
+
+			DMA1_Channel6->CCR &= ~1; //disable DMA1 Channel 6 for reconfiguring
+			if(currentLEDRow == 3) currentLEDRow = 0;
+			else currentLEDRow++;
+			DMA1_Channel6->CNDTR = 3; //reload 3 bytes to transfer
+			DMA1_Channel6->CMAR = &(LEDMatrixBuffer[currentLEDRow*3]); //set next target
+			DMA1_Channel6->CCR |= 1; //enable DMA1 Channel 6
+
+		}
+
+		I2C1->CR1 |= (1<<8); //if BTF is set, send restart condition
+		while ((I2C1->SR1 & 1) == 0); //clear SB
+		I2C1->DR = LEDMatrix_Address; //address the MCP23017
+
+
+		I2C1->CR2 |= (1<<11); //enable DMA Requests
+	}
+
+  /* USER CODE END I2C1_EV_IRQn 0 */
+  HAL_I2C_EV_IRQHandler(&hi2c1);
+  /* USER CODE BEGIN I2C1_EV_IRQn 1 */
+  	GPIOA->BRR = 1<<7;
+  /* USER CODE END I2C1_EV_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

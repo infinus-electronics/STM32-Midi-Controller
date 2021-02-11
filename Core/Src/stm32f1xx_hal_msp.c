@@ -186,7 +186,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     hdma_i2c1_tx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_i2c1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_i2c1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_i2c1_tx.Init.Mode = DMA_CIRCULAR;
+    hdma_i2c1_tx.Init.Mode = DMA_NORMAL;
     hdma_i2c1_tx.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_i2c1_tx) != HAL_OK)
     {
@@ -250,6 +250,9 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
 
     /* I2C1 DMA DeInit */
     HAL_DMA_DeInit(hi2c->hdmatx);
+
+    /* I2C1 interrupt DeInit */
+    HAL_NVIC_DisableIRQ(I2C1_EV_IRQn);
   /* USER CODE BEGIN I2C1_MspDeInit 1 */
 
   /* USER CODE END I2C1_MspDeInit 1 */
