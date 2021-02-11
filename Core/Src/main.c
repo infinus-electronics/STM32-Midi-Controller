@@ -96,6 +96,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 
 void LEDMatrixInit(uint8_t addr);
 void LEDMatrixStart(uint8_t addr);
+void LEDMatrixNextFrame(uint8_t addr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -294,6 +295,8 @@ void LEDMatrixStart(uint8_t addr){
 
 
 }
+
+
 /* LCD Defines */
 
 /**
@@ -526,8 +529,8 @@ int main(void)
   LCDInit(LCD_Address);
   LEDMatrixInit(LEDMatrix_Address);
 
-  //TIM2->CR1 |= 1; //enable BAM Driver
-  //TIM3->CR1 |= 1; //enable encoder scan driver
+  TIM2->CR1 |= 1; //enable BAM Driver
+  TIM3->CR1 |= 1; //enable encoder scan driver
 
 
   LCDClear(LCD_Address);
@@ -540,7 +543,7 @@ int main(void)
 
   for(int i = 0; i < 4; i++){ //function to drive the LED's
 	  LEDMatrixBuffer[i*3] = 0x14;
-	  LEDMatrixBuffer[i*3+1] = (1<<i);
+	  LEDMatrixBuffer[i*3+1] = ~(1<<i);
 	  LEDMatrixBuffer[i*3+2] = LEDMatrix[i];
   }
 

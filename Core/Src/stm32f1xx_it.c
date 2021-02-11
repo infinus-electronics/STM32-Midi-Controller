@@ -64,7 +64,43 @@ extern uint8_t LEDMatrixBuffer[];
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void LEDMatrixNextRow(uint8_t addr){
 
+	blocked = 1; //avoid issues
+
+	DMA1_Channel6->CCR &= ~1; //disable DMA1 Channel 6 for reconfiguring
+	if(currentLEDRow == 3) currentLEDRow = 0;
+	else currentLEDRow++;
+	DMA1_Channel6->CNDTR = 3; //reload 3 bytes to transfer
+	DMA1_Channel6->CMAR = (uint32_t)&(LEDMatrixBuffer[currentLEDRow*3]); //set next target
+	DMA1_Channel6->CCR |= 1; //enable DMA1 Channel 6
+
+	__disable_irq();
+	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
+	I2C1->CR1 |= (1<<8); //send restart condition
+	while ((I2C1->SR1 & 1) == 0); //clear SB
+	I2C1->DR = LEDMatrix_Address; //address the MCP23017
+	I2C1->CR2 |= (1<<11); //enable DMA Requests
+	TIM2->CR1 |= 1; //enable BAM Driver
+	TIM3->CR1 |= 1;
+	__enable_irq();
+
+/*	__disable_irq();
+	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
+	I2C1->CR1 |= (1<<8); //send start condition
+	while ((I2C1->SR1 & 1) == 0); //clear SB
+	I2C1->DR = LEDMatrix_Address; //address the MCP23017
+
+	I2C1->CR2 |= (1<<11); //enable DMA Requests
+	if(DMA1_Channel6->CCR&1) GPIOA->BSRR = 1<<6;
+	else GPIOA->BRR = 1<<6;
+	TIM2->CR1 |= 1; //enable BAM Driver
+	TIM3->CR1 |= 1;
+	__enable_irq();*/
+
+}
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -309,6 +345,7 @@ void TIM2_IRQHandler(void)
 
 		BAMIndex = 0;
 		TIM2->PSC = 1;
+		LEDMatrixNextFrame(LEDMatrix_Address);
 
 
 
@@ -375,6 +412,8 @@ void I2C1_EV_IRQHandler(void)
 
 	//hmmm it got stuck in here... coz im an idiot...
 
+	//note: time to transfer 4 packets at this speed is about 382 us
+
 
 
 	GPIOA->BSRR = 1<<7;
@@ -391,17 +430,37 @@ void I2C1_EV_IRQHandler(void)
 			if(currentLEDRow == 3) currentLEDRow = 0;
 			else currentLEDRow++;
 			DMA1_Channel6->CNDTR = 3; //reload 3 bytes to transfer
-			DMA1_Channel6->CMAR = &(LEDMatrixBuffer[currentLEDRow*3]); //set next target
+			DMA1_Channel6->CMAR = (uint32_t)&(LEDMatrixBuffer[currentLEDRow*3]); //set next target
 			DMA1_Channel6->CCR |= 1; //enable DMA1 Channel 6
 
+
+
+			if(currentLEDRow == 0){
+
+				I2C1->CR1 |= (1<<8); //we've refreshed the matrix once, proceed to clear the outputs
+				while ((I2C1->SR1 & 1) == 0); //clear SB
+				I2C1->DR = LEDMatrix_Address; //address the MCP23017
+				while ((I2C1->SR1 & (1<<1)) == 0); //wait for ADDR flag
+				while ((I2C1->SR2 & (1<<2)) == 0); //read I2C SR2
+				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+				I2C1->DR = 0x14; //write to IODIR_A
+				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+				I2C1->DR = 0xff; //all off
+				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
+				//while ((I2C1->SR1 & (1<<2)) == 0); //make sure BTF is 1
+				I2C1->CR1 |= (1<<9); //send stop condition
+				blocked = 0; //give clearance for other blocking operations
+			}
+			else{ //continue refreshing the next row of the matrix
+
+				I2C1->CR1 |= (1<<8); //send restart condition
+				while ((I2C1->SR1 & 1) == 0); //clear SB
+				I2C1->DR = LEDMatrix_Address; //address the MCP23017
+
+
+				I2C1->CR2 |= (1<<11); //enable DMA Requests
+			}
 		}
-
-		I2C1->CR1 |= (1<<8); //if BTF is set, send restart condition
-		while ((I2C1->SR1 & 1) == 0); //clear SB
-		I2C1->DR = LEDMatrix_Address; //address the MCP23017
-
-
-		I2C1->CR2 |= (1<<11); //enable DMA Requests
 	}
 
   /* USER CODE END I2C1_EV_IRQn 0 */
