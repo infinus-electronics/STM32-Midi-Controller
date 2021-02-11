@@ -173,6 +173,8 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	TIM3->CR1 &= ~1;
+	//__disable_irq();
+
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = addr; //address the MCP23017
@@ -194,9 +196,11 @@ void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 	I2C2->CR1 |= (1<<9); //send stop condition
 
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+
+	//__enable_irq();
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
-	//__enable_irq();
+
 	//GPIOA->BRR = (1<<7);
 
 }
@@ -217,6 +221,7 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	TIM3->CR1 &= ~1;
+	//__disable_irq();
 
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -237,6 +242,8 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
+
+	//__enable_irq();
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 	//__enable_irq();
@@ -385,6 +392,7 @@ void LCDData(char data, uint8_t addr){
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	TIM3->CR1 &= ~1;
+	//__disable_irq();
 
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
@@ -399,6 +407,7 @@ void LCDData(char data, uint8_t addr){
 	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
 
+	//__enable_irq();
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 
@@ -567,10 +576,10 @@ int main(void)
 	  brightness[3] = encoderValues[0];
 
 
-	  //LCDShiftLeft(LCD_Address);
-	  //DWT_Delay_ms(500);
-	  //LCDShiftRight(LCD_Address);
-	  //DWT_Delay_ms(500);
+	  LCDShiftLeft(LCD_Address);
+	  DWT_Delay_ms(500);
+	  LCDShiftRight(LCD_Address);
+	  DWT_Delay_ms(500);
 	  //LCDCycleEN(LCD_Address);
 
 
