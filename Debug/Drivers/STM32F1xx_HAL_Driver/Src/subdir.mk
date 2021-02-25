@@ -15,6 +15,7 @@ C_SRCS += \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.c \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.c \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.c \
+../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.c \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.c \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.c \
 ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.c \
@@ -36,6 +37,7 @@ OBJS += \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.o \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.o \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.o \
+./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.o \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.o \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.o \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.o \
@@ -57,6 +59,7 @@ C_DEPS += \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.d \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.d \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.d \
+./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.d \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.d \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.d \
 ./Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.d \
@@ -90,6 +93,8 @@ Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.o: ../Drivers/STM32F1xx_H
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m3 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F103xB -DDEBUG -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.d" -MT"$@" --specs=nano.specs -mfloat-abi=soft -mthumb -o "$@"
 Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.o: ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.c
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m3 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F103xB -DDEBUG -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.d" -MT"$@" --specs=nano.specs -mfloat-abi=soft -mthumb -o "$@"
+Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.o: ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.c
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m3 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F103xB -DDEBUG -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_iwdg.d" -MT"$@" --specs=nano.specs -mfloat-abi=soft -mthumb -o "$@"
 Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.o: ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.c
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m3 -std=gnu11 -g3 -DUSE_HAL_DRIVER -DSTM32F103xB -DDEBUG -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.d" -MT"$@" --specs=nano.specs -mfloat-abi=soft -mthumb -o "$@"
 Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.o: ../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.c
