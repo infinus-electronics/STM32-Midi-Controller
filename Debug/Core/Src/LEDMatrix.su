@@ -1,0 +1,3 @@
+LEDMatrix.c:18:6:LEDMatrixInit	16	static,ignoring_inline_asm
+LEDMatrix.c:44:6:LEDMatrixStart	16	static,ignoring_inline_asm
+LEDMatrix.c:69:6:LEDMatrixNextRow	16	static,ignoring_inline_asm

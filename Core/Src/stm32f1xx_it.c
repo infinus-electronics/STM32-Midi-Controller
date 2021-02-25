@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include <stdio.h>
+#include "LEDMatrix.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,7 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LEDMatrix_Address 0b01001000
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,8 +55,9 @@ extern volatile int8_t encoderLUT[16];
 extern volatile int encoderValues[5];
 extern volatile uint8_t encoderChanged[5];
 
-extern volatile uint8_t currentLEDRow;
-extern uint8_t LEDMatrixBuffer[];
+extern volatile uint8_t updateLCD;
+extern volatile uint8_t cycleEN;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,49 +67,14 @@ extern uint8_t LEDMatrixBuffer[];
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void LEDMatrixNextRow(uint8_t addr){
 
-	blocked = 1; //avoid issues
-
-	DMA1_Channel6->CCR &= ~1; //disable DMA1 Channel 6 for reconfiguring
-	if(currentLEDRow == 3) currentLEDRow = 0;
-	else currentLEDRow++;
-	DMA1_Channel6->CNDTR = 3; //reload 3 bytes to transfer
-	DMA1_Channel6->CMAR = (uint32_t)&(LEDMatrixBuffer[currentLEDRow*3]); //set next target
-	DMA1_Channel6->CCR |= 1; //enable DMA1 Channel 6
-
-	__disable_irq();
-	TIM2->CR1 &= ~1; //disable BAM Driver
-	TIM3->CR1 &= ~1;
-	I2C1->CR1 |= (1<<8); //send restart condition
-	while ((I2C1->SR1 & 1) == 0); //clear SB
-	I2C1->DR = LEDMatrix_Address; //address the MCP23017
-	I2C1->CR2 |= (1<<11); //enable DMA Requests
-	TIM2->CR1 |= 1; //enable BAM Driver
-	TIM3->CR1 |= 1;
-	__enable_irq();
-
-/*	__disable_irq();
-	TIM2->CR1 &= ~1; //disable BAM Driver
-	TIM3->CR1 &= ~1;
-	I2C1->CR1 |= (1<<8); //send start condition
-	while ((I2C1->SR1 & 1) == 0); //clear SB
-	I2C1->DR = LEDMatrix_Address; //address the MCP23017
-
-	I2C1->CR2 |= (1<<11); //enable DMA Requests
-	if(DMA1_Channel6->CCR&1) GPIOA->BSRR = 1<<6;
-	else GPIOA->BRR = 1<<6;
-	TIM2->CR1 |= 1; //enable BAM Driver
-	TIM3->CR1 |= 1;
-	__enable_irq();*/
-
-}
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_i2c1_tx;
 extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
@@ -289,9 +256,10 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-	//GPIOA->BSRR = 1<<6;
+	GPIOA->BSRR = 1<<6;
 	if(BAMIndex == 0){
 		blocked = 1; //block to protect the time sensitive LSB's, otherwise it gets pretty flicker-ry
+
 
 	}
 
@@ -319,7 +287,7 @@ void TIM2_IRQHandler(void)
 	if(brightness[3] & (1 << BAMIndex))	GPIOB->BSRR = (1<<15);
 	*/
 
-	//GPIOA->BRR = 1<<6;
+	GPIOA->BRR = 1<<6;
 	/*
 	for(int i = 0; i < 4; i++){ //BAM all 4 LED's
 
@@ -370,7 +338,7 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
-	GPIOA->BSRR = 1<<6;
+	//GPIOA->BSRR = 1<<6;
 	uint8_t currentReadoff = ((((GPIOA->IDR)>>9) & 1) << 1) | (((GPIOA->IDR)>>10) & 1); //read current encoder state
 	uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
 	encoderValues[currentEncoder] += encoderLUT[index];
@@ -397,7 +365,7 @@ void TIM3_IRQHandler(void)
 	GPIOA->BRR = (1<<15);
 	if(currentEncoder&4) GPIOA->BSRR = (1<<15); //BLOODY SOLDER DAG!!! Shorted out the pins giving the result in DS14
 
-	GPIOA->BRR = 1<<6;
+	//GPIOA->BRR = 1<<6;
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
@@ -418,7 +386,7 @@ void I2C1_EV_IRQHandler(void)
 
 
 
-	GPIOA->BSRR = 1<<7;
+	//GPIOA->BSRR = 1<<7;
 	if(I2C1->SR1 & (1<<2)){ //BTF is set
 
 		I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
@@ -469,8 +437,38 @@ void I2C1_EV_IRQHandler(void)
   /* USER CODE END I2C1_EV_IRQn 0 */
   HAL_I2C_EV_IRQHandler(&hi2c1);
   /* USER CODE BEGIN I2C1_EV_IRQn 1 */
-  	GPIOA->BRR = 1<<7;
+  	//GPIOA->BRR = 1<<7;
   /* USER CODE END I2C1_EV_IRQn 1 */
+}
+
+/**
+  * @brief This function handles I2C2 event interrupt.
+  */
+void I2C2_EV_IRQHandler(void)
+{
+  /* USER CODE BEGIN I2C2_EV_IRQn 0 */
+	if(I2C2->SR1 & (1<<2)){ //BTF is set
+
+		I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
+		I2C2->CR1 |= (1<<9); //send stop condition
+
+		if(1){
+
+			GPIOA->BRR = 1<<8;
+			GPIOA->BSRR = 1<<8; //this pulse is 100ns, aka too short, datasheet specifies min of 230 ns
+			GPIOA->BSRR = 1<<8;
+			GPIOA->BSRR = 1<<8;
+			GPIOA->BRR = 1<<8;
+			cycleEN = 0;
+
+		}
+	}
+
+  /* USER CODE END I2C2_EV_IRQn 0 */
+  HAL_I2C_EV_IRQHandler(&hi2c2);
+  /* USER CODE BEGIN I2C2_EV_IRQn 1 */
+
+  /* USER CODE END I2C2_EV_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

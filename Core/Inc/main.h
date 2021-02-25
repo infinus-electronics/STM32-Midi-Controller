@@ -32,7 +32,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+extern volatile uint8_t blocked; //time critical BAM code running, do not disable interrupts
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

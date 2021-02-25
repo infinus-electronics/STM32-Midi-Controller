@@ -1,0 +1,12 @@
+LCD.c:16:6:MCP23017SetPin	16	static
+LCD.c:64:6:MCP23017ClearPin	16	static
+LCD.c:130:6:LCDInit	16	static,ignoring_inline_asm
+LCD.c:192:6:LCDData	16	static
+LCD.c:219:6:LCDCommand	16	static
+LCD.c:232:6:LCDCycleEN	16	static
+LCD.c:251:6:LCDWriteChar	16	static
+LCD.c:260:6:LCDWriteString	24	static
+LCD.c:268:6:LCDClear	16	static
+LCD.c:275:6:LCDSetCursor	24	static
+LCD.c:290:6:LCDShiftLeft	16	static
+LCD.c:297:6:LCDShiftRight	16	static

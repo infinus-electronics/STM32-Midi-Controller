@@ -25,17 +25,19 @@
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include <stdio.h>
+#include "DWT_Delay.h"
+#include "LCD.h"
+#include "LEDMatrix.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef enum bank {A, B} bank;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LCD_Address 0b01001110
-#define LEDMatrix_Address 0b01001000
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,6 +51,7 @@ ADC_HandleTypeDef hadc1;
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 DMA_HandleTypeDef hdma_i2c1_tx;
+DMA_HandleTypeDef hdma_i2c2_tx;
 
 IWDG_HandleTypeDef hiwdg;
 
@@ -60,17 +63,19 @@ volatile uint8_t brightness[4] = {1,1,1,1}; //initialize array holding brightnes
 volatile uint8_t BAMIndex = 0;
 volatile uint8_t blocked = 0; //time critical BAM code running, do not disable interrupts
 
+
 volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
 volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
 
-uint8_t currentIOState[2] = {0, 0}; //current state of the LCD MCP23017
 
-uint8_t LEDMatrix[4] = {0b10101010, 0b01010101, 0b11110000, 0b00001111}; //current state of the LED Matrix per row
-uint8_t LEDMatrixBuffer[12];
-volatile uint8_t currentLEDRow = 0;
+volatile uint8_t updateLCD = 0; //does the LCD have data pending an update?
+volatile uint8_t LCDBuffer[32]; //DMA Buffer for the LCD
+volatile uint8_t cycleEN = 0; //does the enable pin need to be cycled?
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,21 +90,9 @@ static void MX_TIM3_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
-void LCDCommand(char data, uint8_t addr);
-void LCDData(char data, uint8_t addr);
-void LCDInit(uint8_t addr);
-void LCDWriteChar(char c, uint8_t addr);
-void LCDWriteString(char *str, uint8_t addr);
-void LCDClear(uint8_t addr);
-void LCDCycleEN(uint8_t addr);
-void LCDSetCursor(uint8_t row, uint8_t col, uint8_t addr);
-void LCDShiftRight(uint8_t addr);
-void LCDShiftLeft(uint8_t addr);
-void MCP23017SetPin(uint8_t pin, bank b, uint8_t address);
-void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 
-void LEDMatrixInit(uint8_t addr);
-void LEDMatrixStart(uint8_t addr);
+
+
 
 /* USER CODE END PFP */
 
@@ -111,386 +104,7 @@ void debug(){
 	GPIOA->BRR = (1<<7);
 }
 
-/* DWT based delay */
-uint32_t DWT_Delay_Init(void)
-{
-    /* Disable TRC */
-    CoreDebug->DEMCR &= ~CoreDebug_DEMCR_TRCENA_Msk; // ~0x01000000;
-    /* Enable TRC */
-    CoreDebug->DEMCR |=  CoreDebug_DEMCR_TRCENA_Msk; // 0x01000000;
-    /* Disable clock cycle counter */
-    DWT->CTRL &= ~DWT_CTRL_CYCCNTENA_Msk; //~0x00000001;
-    /* Enable  clock cycle counter */
-    DWT->CTRL |=  DWT_CTRL_CYCCNTENA_Msk; //0x00000001;
-    /* Reset the clock cycle counter value */
-    DWT->CYCCNT = 0;
-    /* 3 NO OPERATION instructions */
-    __ASM volatile ("NOP");
-    __ASM volatile ("NOP");
-    __ASM volatile ("NOP");
-    /* Check if clock cycle counter has started */
-    if(DWT->CYCCNT)
-    {
-       return 0; /*clock cycle counter started*/
-    }
-    else
-    {
-      return 1; /*clock cycle counter not started*/
-    }
-}
 
-__STATIC_INLINE void DWT_Delay_us(volatile uint32_t au32_microseconds)
-{
-  uint32_t au32_initial_ticks = DWT->CYCCNT;
-  uint32_t au32_ticks = (HAL_RCC_GetHCLKFreq() / 1000000);
-  au32_microseconds *= au32_ticks;
-  while ((DWT->CYCCNT - au32_initial_ticks) < au32_microseconds-au32_ticks);
-}
-
-__STATIC_INLINE void DWT_Delay_ms(volatile uint32_t au32_milliseconds)
-{
-  uint32_t au32_initial_ticks = DWT->CYCCNT;
-  uint32_t au32_ticks = (HAL_RCC_GetHCLKFreq() / 1000);
-  au32_milliseconds *= au32_ticks;
-  while ((DWT->CYCCNT - au32_initial_ticks) < au32_milliseconds);
-}
-
-//https://deepbluembedded.com/stm32-delay-microsecond-millisecond-utility-dwt-delay-timer-delay/
-
-
-
-/* MCP23017 Defines */
-
-void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
-
-	while(blocked); //wait for clearance
-	//GPIOA->BSRR = (1<<7);
-
-	currentIOState[b] |= (1<<pin);
-
-	//Note that all the I2C pointers are already volatile
-	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames. It looks like the interrupt routine is plenty fast when compared to a full byte transfer, but just too long to squeeze into a start condition. YUP, CONFIRMED THAT IT GETS STUCK WAITING FOR THE ADDRESS FLAG, IE the address flag is not set!
-	//write out the new state
-	//UPDATE: This messes up the BAM Driver because it causes the BAM to skip entire steps... its better just to pause TIM2
-	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
-
-
-	TIM2->CR1 &= ~1; //disable BAM Driver
-	TIM3->CR1 &= ~1;
-	//__disable_irq();
-
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	//__enable_irq(); didn't work here
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	if(b==A){
-		I2C2->DR = 0x14;
-	}
-	else{
-		I2C2->DR = 0x15;
-	}
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = currentIOState[b]; //just pull everything low
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
-
-	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
-
-	//__enable_irq();
-	TIM2->CR1 |= 1; //enable BAM Driver
-	TIM3->CR1 |= 1;
-
-	//GPIOA->BRR = (1<<7);
-
-}
-
-void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
-
-	while(blocked); //wait for clearance
-	//GPIOA->BSRR = (1<<7);
-
-	currentIOState[b] &= ~(1<<pin);
-	//Note that all the I2C pointers are already volatile
-	//I think I know the problem here, the start condition is sent, then the interrupt fires, then I2C DR has yet to be written, so the entire thing crashes in a pile of flames. It looks like the interrupt routine is plenty fast when compared to a full byte transfer, but just too long to squeeze into a start condition. YUP, CONFIRMED THAT IT GETS STUCK WAITING FOR THE ADDRESS FLAG, IE the address flag is not set!
-	//write out the new state
-	//UPDATE: This messses up the BAM Driver... I think it'll be better just to stop TIM2
-	//__disable_irq(); //the entire routine will be super duper unhappy unless this is in place
-
-	//potential issue: the other interrupts may cause this crap to fail again...
-
-	TIM2->CR1 &= ~1; //disable BAM Driver
-	TIM3->CR1 &= ~1;
-	//__disable_irq();
-
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	//__enable_irq(); didn't work here
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	if(b==A){
-		I2C2->DR = 0x14;
-	}
-	else{
-		I2C2->DR = 0x15;
-	}
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = currentIOState[b]; //just pull everything low
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
-	while ((I2C2->SR2 & (1<<1)) == 1); //make damn sure the I2C bus is free
-
-	//__enable_irq();
-	TIM2->CR1 |= 1; //enable BAM Driver
-	TIM3->CR1 |= 1;
-	//__enable_irq();
-	//GPIOA->BRR = (1<<7);
-
-}
-
-void LEDMatrixInit(uint8_t addr){
-
-
-	//note: BTF clearing and stop generation are handled by the Event Interrupt
-	__disable_irq();
-
-
-
-	I2C1->CR1 |= (1<<8); //send start condition
-	while ((I2C1->SR1 & 1) == 0); //clear SB
-	I2C1->DR = addr; //address the MCP23017
-	while ((I2C1->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C1->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C1->DR = 0x00; //write to IODIR_A
-	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C1->DR = 0x00; //all outputs
-	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C1->DR = 0x00; //all outputs for next address which is IODIR_B
-	while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	//while ((I2C1->SR1 & (1<<2)) == 0); //make sure BTF is 1
-	I2C1->CR1 |= (1<<9); //send stop condition
-	__enable_irq();
-
-}
-
-void LEDMatrixStart(uint8_t addr){
-
-	while(blocked); //just so nothing stupid happens
-
-
-	DMA1_Channel6->CMAR = (uint32_t)LEDMatrixBuffer;
-	DMA1_Channel6->CPAR = (uint32_t)&(I2C1->DR);
-	DMA1_Channel6->CNDTR = 3;
-	DMA1_Channel6->CCR |= (0b11<<12); //High Priority
-	DMA1_Channel6->CCR |= (1<<4 | 1<<7); //set MINC and Read from Memory
-	//DMA1_Channel6->CCR |= (1<<1); //enable transfer complete interrupt
-
-	DMA1_Channel6->CCR |= 1; //activate DMA
-
-	__disable_irq();
-	I2C1->CR2 |= (1<<9); //enable event interrupts
-	I2C1->CR1 |= (1<<8); //send start condition
-	while ((I2C1->SR1 & 1) == 0); //clear SB
-	I2C1->DR = addr; //address the MCP23017
-	I2C1->CR2 |= (1<<11); //enable DMA Requests
-	__enable_irq();
-
-
-
-}
-
-
-/* LCD Defines */
-
-/**
- * LCD Pinout:
- * A0-A7 : D0-D7
- * B2: RS
- * B1: RW
- * B0: E
- */
-
-#define RS_Pin 2
-#define RW_Pin 1
-#define EN_Pin 0
-
-/**
- * \fn LCDInit
- * @brief Initialises both the LCD and the MCP23017
- *
- * @param addr Address of the MCP23017
- */
-void LCDInit(uint8_t addr){ //interrupts should be disabled here
-
-	//while(blocked); //wait for clearance anyways just for good measure
-
-	//Initialise the MCP23017 first
-	__disable_irq(); //let's allow the init to go down peacefully
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x00; //write to IODIR_A
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x00; //all outputs
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x00; //all outputs for next address which is IODIR_B
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
-
-
-	//Pull RS, RW and E pins LOW
-	MCP23017ClearPin(RS_Pin, B, LCD_Address);
-	MCP23017ClearPin(RS_Pin, B, LCD_Address);
-	MCP23017ClearPin(RS_Pin, B, LCD_Address);
-
-
-
-	LCDData(0x00, addr); //clear the data pins as well
-	DWT_Delay_ms(30);
-
-	LCDCommand(0x30, addr); //function set
-	DWT_Delay_ms(5);
-
-	LCDCommand(0x30, addr); //function set
-	DWT_Delay_ms(5);
-
-	LCDCommand(0x30, addr); //function set
-	DWT_Delay_us(1000);
-
-	LCDCommand(0x38, addr); //8-bit mode, 2 lines, smaller font
-
-	LCDCommand(0x0C, addr); //display ON
-
-	LCDCommand(0x01, addr); //display clear
-	DWT_Delay_us(2000); //clear requires a substantial delay
-
-	LCDCommand(0x06, addr); //set entry mode
-
-	__enable_irq();
-
-
-}
-
-/**
- * \fn LCDData
- * @brief Presents the data to D0 to D7 (located on Bank A)
- *
- * @param data Data to send
- * @param addr I2C Address of the MCP23017
- */
-void LCDData(char data, uint8_t addr){
-
-	while(blocked); //wait for clearance
-
-	TIM2->CR1 &= ~1; //disable BAM Driver
-	TIM3->CR1 &= ~1;
-	//__disable_irq();
-
-	I2C2->CR1 |= (1<<8); //send start condition
-	while ((I2C2->SR1 & 1) == 0); //clear SB
-	I2C2->DR = addr; //address the MCP23017
-	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = 0x14; //write to GPIO_A
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = data; //present data at output bank A
-	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	//while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
-	I2C2->CR1 |= (1<<9); //send stop condition
-
-	//__enable_irq();
-	TIM2->CR1 |= 1; //enable BAM Driver
-	TIM3->CR1 |= 1;
-
-}
-
-void LCDCommand(char data, uint8_t addr){
-
-
-	MCP23017ClearPin(RS_Pin, B, addr);
-
-	LCDData(data, addr);
-
-	LCDCycleEN(addr);
-
-}
-
-void LCDCycleEN(uint8_t addr){
-
-	MCP23017ClearPin(EN_Pin, B, addr);
-	DWT_Delay_us(1);
-	MCP23017SetPin(EN_Pin, B, addr);
-	DWT_Delay_us(1);
-	MCP23017ClearPin(EN_Pin, B, addr);
-	DWT_Delay_us(100);
-
-
-}
-
-void LCDWriteChar(char data, uint8_t addr){
-
-	MCP23017SetPin(RS_Pin, B, addr);
-	LCDData(data, addr);
-	LCDCycleEN(addr);
-
-}
-
-void LCDWriteString(char *str, uint8_t addr){
-
-	for(int i = 0; (volatile char)str[i] != '\x00' ; i++){ //Nice touch: take advantage of null byte terminated strings
-		LCDWriteChar(str[i], addr);
-	}
-
-}
-
-void LCDClear(uint8_t addr){
-
-	LCDCommand(1, addr);
-	DWT_Delay_us(2000);
-
-}
-
-void LCDSetCursor(uint8_t row, uint8_t col, uint8_t addr){
-
-	char outbyte;
-
-	if(row == 1){
-		outbyte = 0x80 + col - 1;
-		LCDCommand(outbyte, addr);
-	}
-	else if(row == 2){
-		outbyte = 0xC0 + col - 1;
-		LCDCommand(outbyte, addr);
-	}
-
-}
-
-void LCDShiftLeft(uint8_t addr){
-
-	LCDCommand(0x18, addr);
-
-
-}
-
-void LCDShiftRight(uint8_t addr){
-
-	LCDCommand(0x1C, addr);
-
-
-}
 /* USER CODE END 0 */
 
 /**
@@ -581,7 +195,7 @@ int main(void)
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
 
-
+	  /*
 	  for(int i = 0; i < 5; i++){
 		  if(encoderChanged[i]){
 			  char buffer[17] = "";
@@ -595,6 +209,9 @@ int main(void)
 
 		  }
 	  }
+	  */
+	  LCDWriteChar(0x41, LCD_Address);
+	  DWT_Delay_ms(10);
 	  //LCDCycleEN(LCD_Address);
 
 
@@ -667,6 +284,9 @@ static void MX_NVIC_Init(void)
   /* I2C1_EV_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(I2C1_EV_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
+  /* I2C2_EV_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(I2C2_EV_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
 }
 
 /**
@@ -780,7 +400,8 @@ static void MX_I2C2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN I2C2_Init 2 */
-
+  //I2C2->CR2 |= (1<<9); //enable event interrupts
+  //TODO: this is just temporarily here, might cause issues
   /* USER CODE END I2C2_Init 2 */
 
 }
