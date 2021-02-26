@@ -301,3 +301,48 @@ void LCDShiftRight(uint8_t addr){
 
 }
 
+/*
+ * \fn LCDPrepareInt
+ *
+ * @brief this function sets up the MCP23017 so that it can take on the interrupt based auto LCD updating routine
+ */
+//TODO: might want to convert this to DMA driven code
+void LCDPrepareInt(){
+
+	while(blocked); //wait for clearance
+
+	TIM2->CR1 &= ~1; //disable BAM Driver
+	TIM3->CR1 &= ~1;
+	__disable_irq();
+
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = LCD_Address; //address the MCP23017
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x0A; //write to IOCON
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = ((1<<5)|(1<<7)); //disable address incrementation and set bank mode to 1 to prevent the sneaky alternate bank switching shenanigans
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
+	I2C2->CR1 |= (1<<9); //send stop condition
+
+	__enable_irq();
+	TIM2->CR1 |= 1; //enable BAM Driver
+	TIM3->CR1 |= 1;
+
+
+}
+
+/*
+ * \fn LCDWriteStringInt
+ *
+ * @brief This function sets up an interrupt based transfer routine, which is to be driven by TIM 2 every BAM cycle to update a quarter of the LCD
+ */
+//this code must be DMA driven since its called inside the TIM 2 interrupt, which is enough of a mess already
+void LCDWriteStringInt(uint8_t section){
+
+
+}
+

@@ -26,6 +26,10 @@ void LCDCycleEN(uint8_t addr);
 void LCDSetCursor(uint8_t row, uint8_t col, uint8_t addr);
 void LCDShiftRight(uint8_t addr);
 void LCDShiftLeft(uint8_t addr);
+
+void LCDPrepareInt();
+void LCDWriteStringInt(uint8_t section);
+
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t address);
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);
 
