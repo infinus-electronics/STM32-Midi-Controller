@@ -26,6 +26,7 @@
 #include "usbd_cdc_if.h"
 #include <stdio.h>
 #include "LEDMatrix.h"
+#include "LCD.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -315,6 +316,9 @@ void TIM2_IRQHandler(void)
 		BAMIndex = 0;
 		TIM2->PSC = 1;
 		LEDMatrixNextRow(LEDMatrix_Address);
+		if(updateLCD){
+
+		}
 
 
 
@@ -449,19 +453,40 @@ void I2C2_EV_IRQHandler(void)
   /* USER CODE BEGIN I2C2_EV_IRQn 0 */
 	if(I2C2->SR1 & (1<<2)){ //BTF is set
 
-		I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
+		//I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
 		I2C2->CR1 |= (1<<9); //send stop condition
 
-		if(1){
+
+
+		if(cycleEN){
 
 			GPIOA->BRR = 1<<8;
 			GPIOA->BSRR = 1<<8; //this pulse is 100ns, aka too short, datasheet specifies min of 230 ns
 			GPIOA->BSRR = 1<<8;
 			GPIOA->BSRR = 1<<8;
 			GPIOA->BRR = 1<<8;
+
+
+		}
+
+		if(currentLCDByte == 0){
+
+			// we're done with the command byte, set RS
+		}
+		else if(currentLCDByte == 8){
+
+			//we're done with all characters, disable cycleEN
 			cycleEN = 0;
 
 		}
+		else{
+
+			currentLCDByte++;
+
+		}
+
+		//load in next byte into DR here
+		I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
 	}
 
   /* USER CODE END I2C2_EV_IRQn 0 */

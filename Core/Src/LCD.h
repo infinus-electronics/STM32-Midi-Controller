@@ -29,6 +29,12 @@ void LCDShiftLeft(uint8_t addr);
 
 void LCDPrepareInt();
 void LCDWriteStringInt(uint8_t section);
+void LCDPrintString(char* str, uint8_t line);
+extern volatile uint8_t updateLCD;
+extern volatile uint8_t currentLCDSection;
+extern uint8_t LCDBuffer[36];
+extern volatile uint8_t cycleEN;
+extern volatile uint8_t currentLCDByte;
 
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t address);
 void MCP23017ClearPin(uint8_t pin, bank b, uint8_t address);

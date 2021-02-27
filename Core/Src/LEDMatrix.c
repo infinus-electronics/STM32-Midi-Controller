@@ -86,6 +86,8 @@ void LEDMatrixNextRow(uint8_t addr){
 	I2C1->CR2 |= (1<<11); //enable DMA Requests
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
+
+	blocked = 0; //unblock
 	__enable_irq();
 
 /*	__disable_irq();

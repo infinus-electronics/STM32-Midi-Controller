@@ -71,9 +71,6 @@ volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -
 volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
 
 
-volatile uint8_t updateLCD = 0; //does the LCD have data pending an update?
-volatile uint8_t LCDBuffer[32]; //DMA Buffer for the LCD
-volatile uint8_t cycleEN = 0; //does the enable pin need to be cycled?
 
 
 /* USER CODE END PV */
