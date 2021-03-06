@@ -179,6 +179,9 @@ int main(void)
 
   LEDMatrixStart(LEDMatrix_Address);
 
+  LCDPrepareInt();
+  LCDWriteStringInt(0);
+
 
 
   /* USER CODE END 2 */

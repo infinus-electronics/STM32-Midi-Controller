@@ -19,7 +19,10 @@ volatile uint8_t currentLCDByte = 0; //which byte are we at (out of 9)
 
 
 /* MCP23017 Defines */
-
+void debugLCD(){
+	GPIOB->BRR = 1<<1;
+	GPIOB->BSRR = 1<<1;
+}
 void MCP23017SetPin(uint8_t pin, bank b, uint8_t addr){
 
 	while(blocked); //wait for clearance
@@ -336,7 +339,7 @@ void LCDPrepareInt(){
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = 0x0A; //write to IOCON
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
-	I2C2->DR = ((1<<5)|(1<<7)); //disable address incrementation and set bank mode to 1 to prevent the sneaky alternate bank switching shenanigans
+	I2C2->DR = (1<<5)|(1<<7); //disable address incrementation and enable bank = 1
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
 	I2C2->CR1 |= (1<<9); //send stop condition
@@ -345,7 +348,7 @@ void LCDPrepareInt(){
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 
-	I2C1->CR2 |= 1<<9; //enable I2C2 event Interrupts
+	//I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
 
 	//prepare DMA1 Channel 4
 
@@ -358,6 +361,7 @@ void LCDPrepareInt(){
 	DMA1_Channel4->CCR |= 1; //activate DMA
 
 }
+
 
 /*
  * \fn LCDWriteStringInt
@@ -373,7 +377,7 @@ void LCDWriteStringInt(uint8_t section){
 
 	currentLCDByte = 0; //reset the byte counter
 
-	__disable_irq(); //this part is set to run after each LED Matrix next row, so I think we will not face any lockups
+	//__disable_irq(); //this part is set to run after each LED Matrix next row, so I think we will not face any lockups
 
 	DMA1_Channel4->CCR &= ~1; //disable DMA1 Channel 4 for reconfiguring
 
@@ -389,10 +393,20 @@ void LCDWriteStringInt(uint8_t section){
 
 	__disable_irq();
 
+	for(int i = 0; i<100; i++){
+		debugLCD();
+	}
+
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = LCD_Address; //address the LCD MCP23017
-	I2C2->CR2 |= (1<<11); //enable DMA Requests
+	//I2C2->CR2 |= (1<<11); //enable DMA Requests
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0) debugLCD(); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x0A; //address OLATA
+	I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
+
 	__enable_irq();
 
 

@@ -74,7 +74,6 @@ extern volatile uint8_t cycleEN;
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_i2c1_tx;
-extern I2C_HandleTypeDef hi2c1;
 extern I2C_HandleTypeDef hi2c2;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
@@ -315,7 +314,7 @@ void TIM2_IRQHandler(void)
 
 		BAMIndex = 0;
 		TIM2->PSC = 1;
-		//LEDMatrixNextRow(LEDMatrix_Address);
+
 		if(updateLCD){
 
 		}
@@ -378,80 +377,13 @@ void TIM3_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles I2C1 event interrupt.
-  */
-void I2C1_EV_IRQHandler(void)
-{
-  /* USER CODE BEGIN I2C1_EV_IRQn 0 */
-
-	//hmmm it got stuck in here... coz im an idiot...
-
-	//note: time to transfer 4 packets at this speed is about 100 us
-
-
-
-	//GPIOA->BSRR = 1<<7;
-	if(I2C1->SR1 & (1<<2)){ //BTF is set
-
-		//I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
-		//I2C1->CR1 |= (1<<9); //send stop condition
-		//blocked = 0; //give clearance for other blocking operations
-
-		//reconfigure the DMA
-	/*	if(DMA1->ISR & (1<<21)){ //channel 6 transfer complete
-
-
-			DMA1_Channel6->CCR &= ~1; //disable DMA1 Channel 6 for reconfiguring
-			if(currentLEDRow == 3) currentLEDRow = 0;
-			else currentLEDRow++;
-			DMA1_Channel6->CNDTR = 3; //reload 3 bytes to transfer
-			DMA1_Channel6->CMAR = (uint32_t)&(LEDMatrixBuffer[currentLEDRow*3]); //set next target
-			DMA1_Channel6->CCR |= 1; //enable DMA1 Channel 6
-
-
-
-			if(currentLEDRow == 0){
-
-				I2C1->CR1 |= (1<<8); //we've refreshed the matrix once, proceed to clear the outputs
-				while ((I2C1->SR1 & 1) == 0); //clear SB
-				I2C1->DR = LEDMatrix_Address; //address the MCP23017
-				while ((I2C1->SR1 & (1<<1)) == 0); //wait for ADDR flag
-				while ((I2C1->SR2 & (1<<2)) == 0); //read I2C SR2
-				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-				I2C1->DR = 0x14; //write to IODIR_A
-				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-				I2C1->DR = 0xff; //all off
-				while ((I2C1->SR1 & (1<<7)) == 0); //make sure TxE is 1
-				//while ((I2C1->SR1 & (1<<2)) == 0); //make sure BTF is 1
-				I2C1->CR1 |= (1<<9); //send stop condition
-				blocked = 0; //give clearance for other blocking operations
-			}
-			else{ //continue refreshing the next row of the matrix
-
-				I2C1->CR1 |= (1<<8); //send restart condition
-				while ((I2C1->SR1 & 1) == 0); //clear SB
-				I2C1->DR = LEDMatrix_Address; //address the MCP23017
-
-
-				I2C1->CR2 |= (1<<11); //enable DMA Requests
-			}
-		}*/
-	}
-
-  /* USER CODE END I2C1_EV_IRQn 0 */
-  HAL_I2C_EV_IRQHandler(&hi2c1);
-  /* USER CODE BEGIN I2C1_EV_IRQn 1 */
-  	//GPIOA->BRR = 1<<7;
-  /* USER CODE END I2C1_EV_IRQn 1 */
-}
-
-/**
   * @brief This function handles I2C2 event interrupt.
   */
 void I2C2_EV_IRQHandler(void)
 {
   /* USER CODE BEGIN I2C2_EV_IRQn 0 */
 	if(I2C2->SR1 & (1<<2)){ //BTF is set
+		GPIOB->BSRR = 1<<1;
 
 		//I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
 		//I2C2->CR1 |= (1<<9); //send stop condition
@@ -474,7 +406,8 @@ void I2C2_EV_IRQHandler(void)
 			// we're done with the command byte, set RS
 			GPIOB->BSRR = (1<<1);
 			currentLCDByte++;
-			I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+			//I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+			I2C2->DR = 0x42;
 
 		}
 		else if(currentLCDByte == 8){
@@ -489,9 +422,11 @@ void I2C2_EV_IRQHandler(void)
 
 			currentLCDByte++;
 			//load in next byte into DR here
-			I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+			//I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+			I2C2->DR = 0x42;
 
 		}
+		GPIOB->BRR = 1<<1;
 
 
 	}
