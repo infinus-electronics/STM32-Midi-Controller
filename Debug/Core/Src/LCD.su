@@ -12,4 +12,4 @@ LCD.c:297:6:LCDShiftLeft	16	static
 LCD.c:304:6:LCDShiftRight	16	static
 LCD.c:317:6:LCDPrepareInt	4	static,ignoring_inline_asm
 LCD.c:369:6:LCDWriteStringInt	16	static,ignoring_inline_asm
-LCD.c:407:6:LCDPrintString	32	static
+LCD.c:408:6:LCDPrintString	32	static

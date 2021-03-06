@@ -257,7 +257,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-	GPIOA->BSRR = 1<<6;
+	//GPIOA->BSRR = 1<<6;
 	if(BAMIndex == 0){
 		blocked = 1; //block to protect the time sensitive LSB's, otherwise it gets pretty flicker-ry
 
@@ -288,7 +288,7 @@ void TIM2_IRQHandler(void)
 	if(brightness[3] & (1 << BAMIndex))	GPIOB->BSRR = (1<<15);
 	*/
 
-	GPIOA->BRR = 1<<6;
+	//GPIOA->BRR = 1<<6;
 	/*
 	for(int i = 0; i < 4; i++){ //BAM all 4 LED's
 
@@ -315,7 +315,7 @@ void TIM2_IRQHandler(void)
 
 		BAMIndex = 0;
 		TIM2->PSC = 1;
-		LEDMatrixNextRow(LEDMatrix_Address);
+		//LEDMatrixNextRow(LEDMatrix_Address);
 		if(updateLCD){
 
 		}
@@ -393,9 +393,9 @@ void I2C1_EV_IRQHandler(void)
 	//GPIOA->BSRR = 1<<7;
 	if(I2C1->SR1 & (1<<2)){ //BTF is set
 
-		I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
-		I2C1->CR1 |= (1<<9); //send stop condition
-		blocked = 0; //give clearance for other blocking operations
+		//I2C1->CR2 &= ~(1<<11); //disable I2C1 DMA requesting
+		//I2C1->CR1 |= (1<<9); //send stop condition
+		//blocked = 0; //give clearance for other blocking operations
 
 		//reconfigure the DMA
 	/*	if(DMA1->ISR & (1<<21)){ //channel 6 transfer complete
@@ -454,7 +454,7 @@ void I2C2_EV_IRQHandler(void)
 	if(I2C2->SR1 & (1<<2)){ //BTF is set
 
 		//I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
-		I2C2->CR1 |= (1<<9); //send stop condition
+		//I2C2->CR1 |= (1<<9); //send stop condition
 
 
 
@@ -472,21 +472,28 @@ void I2C2_EV_IRQHandler(void)
 		if(currentLCDByte == 0){
 
 			// we're done with the command byte, set RS
+			GPIOB->BSRR = (1<<1);
+			currentLCDByte++;
+			I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+
 		}
 		else if(currentLCDByte == 8){
 
 			//we're done with all characters, disable cycleEN
 			cycleEN = 0;
 
+			I2C2->CR1 |= (1<<9); //send stop condition
+
 		}
 		else{
 
 			currentLCDByte++;
+			//load in next byte into DR here
+			I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
 
 		}
 
-		//load in next byte into DR here
-		I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
+
 	}
 
   /* USER CODE END I2C2_EV_IRQn 0 */

@@ -384,6 +384,7 @@ void LCDWriteStringInt(uint8_t section){
 
 
 	//clear RS
+	GPIOB->BRR = 1<1;
 	cycleEN = 1; //indicate that the subsequent I2C byte transfers should be followed by cycling EN
 
 	__disable_irq();

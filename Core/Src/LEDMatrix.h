@@ -17,7 +17,7 @@ void LEDMatrixStart(uint8_t addr);
 void LEDMatrixNextRow(uint8_t addr);
 
 extern uint8_t LEDMatrix[4];
-extern uint8_t LEDMatrixBuffer[12];
+extern uint8_t LEDMatrixBuffer[16];
 extern volatile uint8_t currentLEDRow;
 
 

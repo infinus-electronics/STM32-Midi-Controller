@@ -71,6 +71,10 @@ volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -
 volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
 
 
+uint32_t lastKeyMatrix = 0; //last state of the key matrix
+uint32_t currentKeyMatrix = 0; //current state of the key matrix
+
+
 
 
 /* USER CODE END PV */
@@ -167,9 +171,10 @@ int main(void)
 
 
   for(int i = 0; i < 4; i++){ //function to drive the LED's
-	  LEDMatrixBuffer[i*3] = 0x14;
-	  LEDMatrixBuffer[i*3+1] = ~(1<<i);
-	  LEDMatrixBuffer[i*3+2] = LEDMatrix[i];
+	  LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
+	  LEDMatrixBuffer[i*4+1] = 0x00;
+	  LEDMatrixBuffer[i*4+2] = ~(1<<i);
+	  LEDMatrixBuffer[i*4+3] = LEDMatrix[i];
   }
 
   LEDMatrixStart(LEDMatrix_Address);
@@ -192,25 +197,41 @@ int main(void)
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
 
-	  /*
-	  for(int i = 0; i < 5; i++){
-		  if(encoderChanged[i]){
-			  char buffer[17] = "";
-			  LCDSetCursor(1,1, LCD_Address);
-			  snprintf(buffer, 16, "Encoder %d", i);
-			  LCDWriteString(buffer, LCD_Address);
-			  LCDSetCursor(2,1, LCD_Address);
-			  snprintf(buffer, 16, "%15d", encoderValues[i]);
-			  LCDWriteString(buffer, LCD_Address);
-			  break;
+	  //scan key matrix
+	  for(int i = 0; i < 4; i++){
 
-		  }
+		  GPIOA->BRR = (0b1111 << 4);  //clear all of PA 4,5,6,7
+		  GPIOA->BSRR = (1 << (4+i));  //energize the ith row
+		  currentKeyMatrix |= ((((GPIOB->IDR) >> 3) & 0b11111) << (5*i)); //hmmmmmmmmm
+
 	  }
-	  */
-	  LCDWriteChar(0x41, LCD_Address);
-	  DWT_Delay_ms(10);
-	  //LCDCycleEN(LCD_Address);
 
+	  //a key was pressed
+	  if(currentKeyMatrix != lastKeyMatrix){
+
+		  //handle keys here
+		  for(int i = 0; i < 4; i++){
+
+			  LEDMatrix[3-i] = (currentKeyMatrix >> ((5*i)+1)) & 0b1111;
+			  //LEDMatrix[3-i] = (1<<i); //FRAK ZERO INDEXING alkfjngkjkfla (originally the idiot me had 4-i)
+			  //hmmm, but on a more serious note tho, why is this array out of bounds not detected... that's definitely something to keep in mind
+		  }
+		  for(int i = 0; i < 4; i++){ //function to drive the LED's
+
+			  LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
+			  LEDMatrixBuffer[i*4+1] = 0x00;
+			  LEDMatrixBuffer[i*4+2] = ~(1<<i);
+			  LEDMatrixBuffer[i*4+3] = LEDMatrix[i];
+
+		   }
+
+		  lastKeyMatrix = currentKeyMatrix;
+	  }
+
+	  currentKeyMatrix = 0; //start afresh
+
+
+	  DWT_Delay_ms(10);
 
   }
   /* USER CODE END 3 */
@@ -278,9 +299,6 @@ static void MX_NVIC_Init(void)
   /* DMA1_Channel6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* I2C1_EV_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(I2C1_EV_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
   /* I2C2_EV_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(I2C2_EV_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
@@ -554,10 +572,12 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                          |GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC13 PC14 PC15 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
@@ -566,15 +586,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA6 PA7 PA8 PA15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_15;
+  /*Configure GPIO pins : PA4 PA5 PA6 PA7
+                           PA8 PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB12 PB13 PB14 PB15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
+  /*Configure GPIO pins : PB1 PB12 PB13 PB14
+                           PB15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                          |GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
@@ -585,6 +609,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB3 PB4 PB5 PB6
+                           PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
+                          |GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
