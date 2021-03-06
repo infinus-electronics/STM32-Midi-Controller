@@ -396,6 +396,8 @@ void I2C2_EV_IRQHandler(void)
 			GPIOA->BSRR = 1<<8; //this pulse is 100ns, aka too short, datasheet specifies min of 230 ns
 			GPIOA->BSRR = 1<<8;
 			GPIOA->BSRR = 1<<8;
+			GPIOA->BSRR = 1<<8;
+			GPIOA->BSRR = 1<<8;
 			GPIOA->BRR = 1<<8;
 
 
