@@ -393,10 +393,6 @@ void LCDWriteStringInt(uint8_t section){
 
 	__disable_irq();
 
-	for(int i = 0; i<100; i++){
-		debugLCD();
-	}
-
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = LCD_Address; //address the LCD MCP23017
@@ -408,6 +404,8 @@ void LCDWriteStringInt(uint8_t section){
 	I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
 
 	__enable_irq();
+
+	//TODO: stick this stuff in setup, then, when a print is scheduled, just load the corresponding data into the DR and let the interrupt routine handle the rest
 
 
 }

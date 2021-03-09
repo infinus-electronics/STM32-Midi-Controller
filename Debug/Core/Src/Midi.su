@@ -1,0 +1,3 @@
+Midi.c:12:6:MidiCC	24	static
+Midi.c:24:6:MidiNoteOn	24	static
+Midi.c:35:6:MidiNoteOff	24	static

@@ -28,6 +28,7 @@
 #include "DWT_Delay.h"
 #include "LCD.h"
 #include "LEDMatrix.h"
+#include "Midi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,6 +75,12 @@ volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated
 uint32_t lastKeyMatrix = 0; //last state of the key matrix
 uint32_t currentKeyMatrix = 0; //current state of the key matrix
 
+
+uint8_t MidiNoteLUT[20]; //which key maps to which note
+uint8_t MidiNoteOffset = 60; //which key does the bottom left button map to?
+uint8_t MidiChannel = 0;
+uint8_t MidiCCFaderLUT[4] = {1, 7, 10, 11}; //which fader maps to which CC
+uint8_t MidiCCEncoderLUT[4] = {1, 7, 10, 11};
 
 
 
@@ -183,6 +190,17 @@ int main(void)
   LCDWriteStringInt(0);
 
 
+  for(int i = 0; i < 4; i++){ //function to fill in the MidiNoteLut
+
+	  for(int j = 0; j < 4; j++){
+
+		  MidiNoteLUT[5*(3-i)+j+1] = MidiNoteOffset + (4*i+j); //math...
+
+	  }
+
+  }
+
+
 
   /* USER CODE END 2 */
 
@@ -199,6 +217,21 @@ int main(void)
 	  brightness[1] = encoderValues[2];
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
+
+
+	  for(int i = 0; i < 4; i++){ //send encoder CC Values
+
+		  if(encoderChanged[i]){
+
+			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], (encoderValues[i]>>1));
+
+		  }
+
+	  }
+
+
+
+
 
 	  //scan key matrix
 	  for(int i = 0; i < 4; i++){
@@ -219,6 +252,7 @@ int main(void)
 			  //LEDMatrix[3-i] = (1<<i); //FRAK ZERO INDEXING alkfjngkjkfla (originally the idiot me had 4-i)
 			  //hmmm, but on a more serious note tho, why is this array out of bounds not detected... that's definitely something to keep in mind
 		  }
+
 		  for(int i = 0; i < 4; i++){ //function to drive the LED's
 
 			  LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
@@ -228,10 +262,33 @@ int main(void)
 
 		   }
 
+		  for(int i = 0; i < 20; i++){ //iterate through all 20 bits and send out Midi Note messages as necessary
+
+			  if((currentKeyMatrix & (1<<i)) && ((lastKeyMatrix & (1<<i)) == 0)){ //this key was pressed
+
+				  MidiNoteOn(MidiChannel, MidiNoteLUT[i], 127);
+
+			  }
+
+
+			  else if((lastKeyMatrix & (1<<i)) && ((currentKeyMatrix & (1<<i)) == 0)){
+
+				  MidiNoteOff(MidiChannel, MidiNoteLUT[i], 0);
+
+			  }
+
+		  }
+
 		  lastKeyMatrix = currentKeyMatrix;
 	  }
 
 	  currentKeyMatrix = 0; //start afresh
+
+
+
+
+
+
 
 
 	  DWT_Delay_ms(10);

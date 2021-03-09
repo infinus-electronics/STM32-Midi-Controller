@@ -1,6 +1,7 @@
 "Core/Src/DWT_Delay.o"
 "Core/Src/LCD.o"
 "Core/Src/LEDMatrix.o"
+"Core/Src/Midi.o"
 "Core/Src/main.o"
 "Core/Src/stm32f1xx_hal_msp.o"
 "Core/Src/stm32f1xx_it.o"

@@ -12,5 +12,5 @@ LCD.c:285:6:LCDSetCursor	24	static
 LCD.c:300:6:LCDShiftLeft	16	static
 LCD.c:307:6:LCDShiftRight	16	static
 LCD.c:320:6:LCDPrepareInt	4	static,ignoring_inline_asm
-LCD.c:373:6:LCDWriteStringInt	24	static,ignoring_inline_asm
-LCD.c:422:6:LCDPrintString	32	static
+LCD.c:373:6:LCDWriteStringInt	16	static,ignoring_inline_asm
+LCD.c:420:6:LCDPrintString	32	static
