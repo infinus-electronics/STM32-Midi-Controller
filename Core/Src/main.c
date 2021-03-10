@@ -29,6 +29,7 @@
 #include "LCD.h"
 #include "LEDMatrix.h"
 #include "Midi.h"
+#include "ADC.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,6 +71,8 @@ volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past
 volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
+
+uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 
 
 uint32_t lastKeyMatrix = 0; //last state of the key matrix
@@ -200,6 +203,18 @@ int main(void)
 
   }
 
+  for(int i = 0; i < 4; i++){
+
+	  int currentADC = ADC1ReadVal8(i);
+	  currentADC += ADC1ReadVal8(i);
+	  currentADC += ADC1ReadVal8(i);
+	  currentADC = currentADC/3;
+
+	  lastFaderValues[i] = currentADC;
+
+
+  }
+
 
 
   /* USER CODE END 2 */
@@ -219,11 +234,29 @@ int main(void)
 	  brightness[3] = encoderValues[0];
 
 
+
+
 	  for(int i = 0; i < 4; i++){ //send encoder CC Values
 
 		  if(encoderChanged[i]){
 
 			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], (encoderValues[i]>>1));
+
+		  }
+
+	  }
+
+	  for(int i = 1; i < 4; i++){
+
+		  int currentADC = ADC1ReadVal8(i);
+		  currentADC += ADC1ReadVal8(i);
+		  currentADC += ADC1ReadVal8(i);
+		  currentADC = currentADC/3;
+
+		  if(abs(currentADC - lastFaderValues[i]) > 3){ // this particular ADC Channel has been updated
+
+			  MidiCC(MidiChannel, MidiCCFaderLUT[i], (currentADC>>1));
+			  lastFaderValues[i] = currentADC;
 
 		  }
 
@@ -396,7 +429,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -404,7 +437,7 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-
+  ADC1->CR2 |= 1; //turn on ADC1
   /* USER CODE END ADC1_Init 2 */
 
 }

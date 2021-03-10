@@ -15,7 +15,8 @@ void MidiCC(uint8_t channel, uint8_t cc, uint8_t val){
 	buffer[0] = 0b10110000 | channel;
 	buffer[1] = cc;
 	buffer[2] = val;
-	while(CDC_Transmit_FS(buffer, 3) != USBD_OK); //TODO: observe if it causes hangups
+	//while(CDC_Transmit_FS(buffer, 3) == USBD_BUSY); //TODO: observe if it causes hangups
+	CDC_Transmit_FS(buffer, 3);
 
 }
 
@@ -27,7 +28,7 @@ void MidiNoteOn(uint8_t channel, uint8_t note, uint8_t velo){
 	buffer[0] = 0b10010000 | channel;
 	buffer[1] = note;
 	buffer[2] = velo;
-	while(CDC_Transmit_FS(buffer, 3) != USBD_OK);
+	while(CDC_Transmit_FS(buffer, 3) == USBD_BUSY);
 
 }
 
@@ -38,6 +39,6 @@ void MidiNoteOff(uint8_t channel, uint8_t note, uint8_t velo){
 	buffer[0] = 0b10000000 | channel;
 	buffer[1] = note;
 	buffer[2] = velo;
-	while(CDC_Transmit_FS(buffer, 3) != USBD_OK);
+	while(CDC_Transmit_FS(buffer, 3) == USBD_BUSY);
 
 }
