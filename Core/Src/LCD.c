@@ -7,13 +7,15 @@
 
 #include "LCD.h"
 #include "DWT_Delay.h"
-
+#include "main.h"
+#include <stdio.h>
 
 uint8_t currentIOState[2] = {0, 0}; //current state of the LCD MCP23017
 
-volatile uint8_t updateLCD = 0; //flag that is to be set to 1 if the LCD has pending data to be updated
+volatile uint8_t isLCDPrinting = 0; //flag that is to be set to 1 if the LCD is currently being updated
 volatile uint8_t currentLCDSection = 0; //the LCD is going to be updated in 4 separate quadrants
-uint8_t LCDBuffer[36]; //32 chars, plus 4 cursor set commands
+uint8_t LCDBufferTop[17]; //top line
+uint8_t LCDBufferBottom[17]; //bottom line
 volatile uint8_t cycleEN = 0; //does the enable pin need to be cycled in I2C2 BTF?
 volatile uint8_t currentLCDByte = 0; //which byte are we at (out of 9)
 
@@ -122,9 +124,9 @@ void MCP23017ClearPin(uint8_t pin, bank b, uint8_t addr){
 /**
  * LCD Pinout:
  * A0-A7 : D0-D7
- * B2: RS
+ * PB1: RS
  * B1: RW
- * B0: E
+ * PA8: E
  */
 
 #define RS_Pin 2
@@ -160,7 +162,8 @@ void LCDInit(uint8_t addr){ //interrupts should be disabled here
 
 
 	//Pull RS, RW and E pins LOW
-	MCP23017ClearPin(RS_Pin, B, LCD_Address);
+	//MCP23017ClearPin(RS_Pin, B, LCD_Address);
+	GPIOB->BRR = 1<<1;
 	MCP23017ClearPin(RW_Pin, B, LCD_Address);
 	GPIOA->BRR = 1<<8;
 
@@ -229,14 +232,14 @@ void LCDData(char data, uint8_t addr){
 void LCDCommand(char data, uint8_t addr){
 
 
-	MCP23017ClearPin(RS_Pin, B, addr);
-
+	//MCP23017ClearPin(RS_Pin, B, addr);
+	GPIOB->BRR = 1<<1;
 	LCDData(data, addr);
 
 	LCDCycleEN(addr);
 
-	MCP23017SetPin(RS_Pin, B, addr);
-
+	//MCP23017SetPin(RS_Pin, B, addr);
+	GPIOB->BSRR = 1<<1;
 }
 
 void LCDCycleEN(uint8_t addr){
@@ -319,13 +322,7 @@ void LCDShiftRight(uint8_t addr){
 //TODO: might want to convert this to DMA driven code
 void LCDPrepareInt(){
 
-	//initialise the buffer for the DMA by inserting all the requisite stuff
-	LCDBuffer[0] = 0x80; //line 1 col 1
-	LCDBuffer[9] = 0x88; //line 1 col 9
-	LCDBuffer[18] = 0xC0; //line 2 col 1
-	LCDBuffer[27] = 0xC8; //line 2 col 2
 
-	while(blocked); //wait for clearance
 
 	TIM2->CR1 &= ~1; //disable BAM Driver
 	TIM3->CR1 &= ~1;
@@ -348,98 +345,79 @@ void LCDPrepareInt(){
 	TIM2->CR1 |= 1; //enable BAM Driver
 	TIM3->CR1 |= 1;
 
-	//I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
-
-	//prepare DMA1 Channel 4
-
-	DMA1_Channel4->CMAR = (uint32_t)LCDBuffer;
-	DMA1_Channel4->CPAR = (uint32_t)&(I2C2->DR);
-	DMA1_Channel4->CNDTR = 1; //this is just for the sake of having to wait for all the I2C data to be shifted out
-	DMA1_Channel4->CCR |= (0b10<<12); //High Priority
-	DMA1_Channel4->CCR |= (1<<4 | 1<<7); //set MINC and Read from Memory
-
-	DMA1_Channel4->CCR |= 1; //activate DMA
 
 }
 
 
+
+
 /*
- * \fn LCDWriteStringInt
- * call this in the TIM 2 ISR
- * update the variable currentLCDSection before calling this function
- * @brief This function sets up an interrupt based transfer routine, which is to be driven by TIM 2 every BAM cycle to update a quarter of the LCD
+ * \fn LCDPrintStringTop
+ *
+ * Interrupt driven auto printer thing for top line
+ *
+ * IMPORTANT: always pass a string 16 characters long into this function, any extra will get truncated at best, potential buffer ovf (CTF brain engaged)
  */
-//this code must be DMA driven since its called inside the TIM 2 interrupt, which is enough of a mess already
-void LCDWriteStringInt(uint8_t section){
+void LCDPrintStringTop(char* str){
 
-	//TODO: code now worry later - implement the line setting code, maybe just set it to run nevertheless for more straightforward timing control
-	//TODO: Set dma to transfer only 1 byte; we are using the DMA to avoid tying up the cpu only, coz we need the BTF signal...
+	IWDG->KR = 0xAAAA;
+	snprintf(LCDBufferTop, 17, "%-16s", str); //dash to left pad
+	IWDG->KR = 0xAAAA;
 
-	currentLCDByte = 0; //reset the byte counter
+	currentLCDByte = 0;
+	isLCDPrinting = 1; //mark that the LCD is busy
 
-	//__disable_irq(); //this part is set to run after each LED Matrix next row, so I think we will not face any lockups
-
-	DMA1_Channel4->CCR &= ~1; //disable DMA1 Channel 4 for reconfiguring
-
-	DMA1_Channel4->CNDTR = 1; //reload
-	DMA1_Channel4->CMAR = (uint32_t)&(LCDBuffer[section*9]); //set target
-
-	DMA1_Channel4->CCR |= 1; //enable DMA1 Channel 4
-
-
-	//clear RS
-	GPIOB->BRR = 1<1;
-	cycleEN = 1; //indicate that the subsequent I2C byte transfers should be followed by cycling EN
+	GPIOB->BRR = 1<<1;
+	cycleEN = 1;
 
 	__disable_irq();
 
 	I2C2->CR1 |= (1<<8); //send start condition
 	while ((I2C2->SR1 & 1) == 0); //clear SB
 	I2C2->DR = LCD_Address; //address the LCD MCP23017
+	__enable_irq();
 	//I2C2->CR2 |= (1<<11); //enable DMA Requests
 	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
-	while ((I2C2->SR2 & (1<<2)) == 0) debugLCD(); //read I2C SR2
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
 	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
 	I2C2->DR = 0x0A; //address OLATA
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x80; //select top row
 	I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
 
-	__enable_irq();
-
-	//TODO: stick this stuff in setup, then, when a print is scheduled, just load the corresponding data into the DR and let the interrupt routine handle the rest
 
 
 }
 
-/*
- * \fn LCDPrintString
- *
- * Interrupt driven auto printer thing
- *
- * IMPORTANT: always pass a string 16 characters long into this function, any extra will get truncated at best, potential buffer ovf (CTF brain engaged)
- */
-void LCDPrintString(char* str, uint8_t line){
 
-	//this function basically copies all the chars into the
-	if(line == 1){
+void LCDPrintStringBottom(char* str){
 
-		for(int i = 0; i < 8; i++){
-			LCDBuffer[i+1] = str[i];
-		}
-		for(int i = 0; i < 8; i++){
-			LCDBuffer[i+10] = str[i];
-		}
+	IWDG->KR = 0xAAAA;
+	snprintf(LCDBufferTop, 17, "%-16s", str); //dash to left pad
+	IWDG->KR = 0xAAAA;
 
-	}
+	currentLCDByte = 0;
+	isLCDPrinting = 1; //mark that the LCD is busy
 
-	else if(line == 2){
-		for(int i = 0; i < 8; i++){
-			LCDBuffer[i+19] = str[i];
-		}
-		for(int i = 0; i < 8; i++){
-			LCDBuffer[i+28] = str[i];
-		}
-	}
+	GPIOB->BRR = 1<<1;
+	cycleEN = 1;
 
-	updateLCD = 1; //signal the interrupt routine that an LCD update is pending
+	__disable_irq();
+
+	I2C2->CR1 |= (1<<8); //send start condition
+	while ((I2C2->SR1 & 1) == 0); //clear SB
+	I2C2->DR = LCD_Address; //address the LCD MCP23017
+	__enable_irq();
+	//I2C2->CR2 |= (1<<11); //enable DMA Requests
+	while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+	while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0x0A; //address OLATA
+	while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+	I2C2->DR = 0xC0; //select bottom row
+	I2C2->CR2 |= 1<<9; //enable I2C2 event Interrupts
+
+
+
 }
 

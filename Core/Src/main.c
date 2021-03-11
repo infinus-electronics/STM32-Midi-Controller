@@ -70,7 +70,7 @@ volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
 volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
-volatile uint8_t encoderChanged[5]; //have any of the encoderValues been updated?
+uint8_t lastEncoderValues[5] = {0, 0, 0, 0, 0};
 
 uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 
@@ -84,6 +84,11 @@ uint8_t MidiNoteOffset = 60; //which key does the bottom left button map to?
 uint8_t MidiChannel = 0;
 uint8_t MidiCCFaderLUT[4] = {1, 7, 10, 11}; //which fader maps to which CC
 uint8_t MidiCCEncoderLUT[4] = {1, 7, 10, 11};
+
+uint8_t LCDQueueTop[17];
+uint8_t LCDQueueBottom[17];
+uint8_t LCDTopQueued; //does the LCD have to be updated this round?
+uint8_t LCDBottomQueued;
 
 
 
@@ -161,6 +166,8 @@ int main(void)
   NVIC_SetPriorityGrouping(0U); //use standard interrupt grouping
   DWT_Delay_Init();
 
+
+  IWDG->KR = 0xAAAA; //reset the watchdog timer
   blocked = 0;
   I2C2->CR1 |= 1; //enable i2c 2 peripheral for LCD and EEPROM
   I2C1->CR1 |= 1; //enable i2c 1 peripheral for LED Matrix
@@ -176,7 +183,7 @@ int main(void)
 
   LCDSetCursor(1, 1, LCD_Address);
 
-  LCDWriteString("AAAA", LCD_Address);
+  //LCDWriteString("AAAA", LCD_Address);
 
 
 
@@ -190,7 +197,7 @@ int main(void)
   LEDMatrixStart(LEDMatrix_Address);
 
   LCDPrepareInt();
-  LCDWriteStringInt(0);
+
 
 
   for(int i = 0; i < 4; i++){ //function to fill in the MidiNoteLut
@@ -212,6 +219,12 @@ int main(void)
 
 	  lastFaderValues[i] = currentADC;
 
+
+  }
+
+  for(int i = 0; i < 5; i++){
+
+	  lastEncoderValues[i] = encoderValues[i];
 
   }
 
@@ -238,9 +251,15 @@ int main(void)
 
 	  for(int i = 0; i < 4; i++){ //send encoder CC Values
 
-		  if(encoderChanged[i]){
+		  if(encoderValues[i] != lastEncoderValues[i]){
 
 			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], (encoderValues[i]>>1));
+			  snprintf(LCDQueueTop, 17, "Encoder %-8d", i);
+			  LCDTopQueued = 1;
+			  snprintf(LCDQueueBottom, 17, "%-16d", encoderValues[i]);
+			  LCDBottomQueued = 1;
+
+			  lastEncoderValues[i] = encoderValues[i];
 
 		  }
 
@@ -317,6 +336,18 @@ int main(void)
 
 	  currentKeyMatrix = 0; //start afresh
 
+
+	  if(!isLCDPrinting){ //update LCD here
+		  if(LCDTopQueued){
+			  LCDPrintStringTop(LCDQueueTop);
+			  LCDTopQueued = 0;
+		  }
+		  else if(LCDBottomQueued){
+			  LCDPrintStringBottom(LCDQueueBottom);
+			  LCDBottomQueued = 0;
+		  }
+
+	  }
 
 
 

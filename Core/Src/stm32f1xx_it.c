@@ -315,9 +315,6 @@ void TIM2_IRQHandler(void)
 		BAMIndex = 0;
 		TIM2->PSC = 1;
 
-		if(updateLCD){
-
-		}
 
 
 
@@ -345,7 +342,6 @@ void TIM3_IRQHandler(void)
 	uint8_t currentReadoff = ((((GPIOA->IDR)>>9) & 1) << 1) | (((GPIOA->IDR)>>10) & 1); //read current encoder state
 	uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
 	encoderValues[currentEncoder] += encoderLUT[index];
-	encoderChanged[currentEncoder] = encoderLUT[index];
 
 	//constrain encoderValues
 	if(encoderValues[currentEncoder] > 255) encoderValues[currentEncoder] = 255;
@@ -383,7 +379,7 @@ void I2C2_EV_IRQHandler(void)
 {
   /* USER CODE BEGIN I2C2_EV_IRQn 0 */
 	if(I2C2->SR1 & (1<<2)){ //BTF is set
-		GPIOB->BSRR = 1<<1;
+
 
 		//I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
 		//I2C2->CR1 |= (1<<9); //send stop condition
@@ -392,6 +388,12 @@ void I2C2_EV_IRQHandler(void)
 
 		if(cycleEN){
 
+			GPIOA->BRR = 1<<8; //wait for the MCP23017 to have valid data
+			GPIOA->BRR = 1<<8;
+			GPIOA->BRR = 1<<8;
+			GPIOA->BRR = 1<<8;
+			GPIOA->BRR = 1<<8;
+			GPIOA->BRR = 1<<8;
 			GPIOA->BRR = 1<<8;
 			GPIOA->BSRR = 1<<8; //this pulse is 100ns, aka too short, datasheet specifies min of 230 ns
 			GPIOA->BSRR = 1<<8;
@@ -409,15 +411,17 @@ void I2C2_EV_IRQHandler(void)
 			GPIOB->BSRR = (1<<1);
 			currentLCDByte++;
 			//I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
-			I2C2->DR = 0x42;
-
+			I2C2->DR = LCDBufferTop[currentLCDByte-1];
+			//I2C2->DR = 0x42;
 		}
-		else if(currentLCDByte == 8){
+		else if(currentLCDByte == 17){
 
 			//we're done with all characters, disable cycleEN
 			cycleEN = 0;
 
 			I2C2->CR1 |= (1<<9); //send stop condition
+			I2C2->CR2 &= ~(1<<9); //disable I2C2 Event Interrupt
+			isLCDPrinting = 0;
 
 		}
 		else{
@@ -425,10 +429,10 @@ void I2C2_EV_IRQHandler(void)
 			currentLCDByte++;
 			//load in next byte into DR here
 			//I2C2->DR = LCDBuffer[currentLCDByte+currentLCDSection * 9];
-			I2C2->DR = 0x42;
-
+			I2C2->DR = LCDBufferTop[currentLCDByte-1];
+			//I2C2->DR = 0x42;
 		}
-		GPIOB->BRR = 1<<1;
+
 
 
 	}

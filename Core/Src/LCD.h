@@ -28,11 +28,13 @@ void LCDShiftRight(uint8_t addr);
 void LCDShiftLeft(uint8_t addr);
 
 void LCDPrepareInt();
-void LCDWriteStringInt(uint8_t section);
-void LCDPrintString(char* str, uint8_t line);
-extern volatile uint8_t updateLCD;
+void LCDPrintStringTop(char* str);
+void LCDPrintStringBottom(char* str);
+
+extern volatile uint8_t isLCDPrinting;
 extern volatile uint8_t currentLCDSection;
-extern uint8_t LCDBuffer[36];
+extern uint8_t LCDBufferTop[17];
+extern uint8_t LCDBufferBottom[17];
 extern volatile uint8_t cycleEN;
 extern volatile uint8_t currentLCDByte;
 
