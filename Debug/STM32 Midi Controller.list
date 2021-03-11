@@ -1960,6 +1960,8 @@ int main(void)
   NVIC_SetPriorityGrouping(0U); //use standard interrupt grouping
  8000d22:	2000      	movs	r0, #0
  8000d24:	f7ff ffbe 	bl	8000ca4 <__NVIC_SetPriorityGrouping>
+
+  //init stuff
   DWT_Delay_Init();
  8000d28:	f7ff fa3c 	bl	80001a4 <DWT_Delay_Init>
 
@@ -1992,88 +1994,87 @@ int main(void)
  8000d58:	2048      	movs	r0, #72	; 0x48
  8000d5a:	f7ff fe09 	bl	8000970 <LEDMatrixInit>
 
-  TIM2->CR1 |= 1; //enable BAM Driver
- 8000d5e:	f04f 4380 	mov.w	r3, #1073741824	; 0x40000000
- 8000d62:	681b      	ldr	r3, [r3, #0]
- 8000d64:	f04f 4280 	mov.w	r2, #1073741824	; 0x40000000
- 8000d68:	f043 0301 	orr.w	r3, r3, #1
- 8000d6c:	6013      	str	r3, [r2, #0]
-  TIM3->CR1 |= 1; //enable encoder scan driver
- 8000d6e:	4b85      	ldr	r3, [pc, #532]	; (8000f84 <main+0x298>)
- 8000d70:	681b      	ldr	r3, [r3, #0]
- 8000d72:	4a84      	ldr	r2, [pc, #528]	; (8000f84 <main+0x298>)
- 8000d74:	f043 0301 	orr.w	r3, r3, #1
- 8000d78:	6013      	str	r3, [r2, #0]
-
-
   LCDClear(LCD_Address);
- 8000d7a:	204e      	movs	r0, #78	; 0x4e
- 8000d7c:	f7ff fc7a 	bl	8000674 <LCDClear>
+ 8000d5e:	204e      	movs	r0, #78	; 0x4e
+ 8000d60:	f7ff fc88 	bl	8000674 <LCDClear>
 
   LCDSetCursor(1, 1, LCD_Address);
- 8000d80:	224e      	movs	r2, #78	; 0x4e
- 8000d82:	2101      	movs	r1, #1
- 8000d84:	2001      	movs	r0, #1
- 8000d86:	f7ff fc87 	bl	8000698 <LCDSetCursor>
+ 8000d64:	224e      	movs	r2, #78	; 0x4e
+ 8000d66:	2101      	movs	r1, #1
+ 8000d68:	2001      	movs	r0, #1
+ 8000d6a:	f7ff fc95 	bl	8000698 <LCDSetCursor>
 
-  //LCDWriteString("AAAA", LCD_Address);
+  LCDPrepareInt();
+ 8000d6e:	f7ff fcb9 	bl	80006e4 <LCDPrepareInt>
+
+
+  TIM2->CR1 |= 1; //enable BAM Driver
+ 8000d72:	f04f 4380 	mov.w	r3, #1073741824	; 0x40000000
+ 8000d76:	681b      	ldr	r3, [r3, #0]
+ 8000d78:	f04f 4280 	mov.w	r2, #1073741824	; 0x40000000
+ 8000d7c:	f043 0301 	orr.w	r3, r3, #1
+ 8000d80:	6013      	str	r3, [r2, #0]
+  TIM3->CR1 |= 1; //enable encoder scan driver
+ 8000d82:	4b80      	ldr	r3, [pc, #512]	; (8000f84 <main+0x298>)
+ 8000d84:	681b      	ldr	r3, [r3, #0]
+ 8000d86:	4a7f      	ldr	r2, [pc, #508]	; (8000f84 <main+0x298>)
+ 8000d88:	f043 0301 	orr.w	r3, r3, #1
+ 8000d8c:	6013      	str	r3, [r2, #0]
 
 
 
   for(int i = 0; i < 4; i++){ //function to drive the LED's
- 8000d8a:	2300      	movs	r3, #0
- 8000d8c:	637b      	str	r3, [r7, #52]	; 0x34
- 8000d8e:	e022      	b.n	8000dd6 <main+0xea>
+ 8000d8e:	2300      	movs	r3, #0
+ 8000d90:	637b      	str	r3, [r7, #52]	; 0x34
+ 8000d92:	e022      	b.n	8000dda <main+0xee>
 	  LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
- 8000d90:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000d92:	009b      	lsls	r3, r3, #2
- 8000d94:	4a7c      	ldr	r2, [pc, #496]	; (8000f88 <main+0x29c>)
- 8000d96:	210f      	movs	r1, #15
- 8000d98:	54d1      	strb	r1, [r2, r3]
+ 8000d94:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000d96:	009b      	lsls	r3, r3, #2
+ 8000d98:	4a7b      	ldr	r2, [pc, #492]	; (8000f88 <main+0x29c>)
+ 8000d9a:	210f      	movs	r1, #15
+ 8000d9c:	54d1      	strb	r1, [r2, r3]
 	  LEDMatrixBuffer[i*4+1] = 0x00;
- 8000d9a:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000d9c:	009b      	lsls	r3, r3, #2
- 8000d9e:	3301      	adds	r3, #1
- 8000da0:	4a79      	ldr	r2, [pc, #484]	; (8000f88 <main+0x29c>)
- 8000da2:	2100      	movs	r1, #0
- 8000da4:	54d1      	strb	r1, [r2, r3]
+ 8000d9e:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000da0:	009b      	lsls	r3, r3, #2
+ 8000da2:	3301      	adds	r3, #1
+ 8000da4:	4a78      	ldr	r2, [pc, #480]	; (8000f88 <main+0x29c>)
+ 8000da6:	2100      	movs	r1, #0
+ 8000da8:	54d1      	strb	r1, [r2, r3]
 	  LEDMatrixBuffer[i*4+2] = ~(1<<i);
- 8000da6:	2201      	movs	r2, #1
- 8000da8:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000daa:	fa02 f303 	lsl.w	r3, r2, r3
- 8000dae:	b2da      	uxtb	r2, r3
- 8000db0:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000db2:	009b      	lsls	r3, r3, #2
- 8000db4:	3302      	adds	r3, #2
- 8000db6:	43d2      	mvns	r2, r2
- 8000db8:	b2d1      	uxtb	r1, r2
- 8000dba:	4a73      	ldr	r2, [pc, #460]	; (8000f88 <main+0x29c>)
- 8000dbc:	54d1      	strb	r1, [r2, r3]
+ 8000daa:	2201      	movs	r2, #1
+ 8000dac:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000dae:	fa02 f303 	lsl.w	r3, r2, r3
+ 8000db2:	b2da      	uxtb	r2, r3
+ 8000db4:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000db6:	009b      	lsls	r3, r3, #2
+ 8000db8:	3302      	adds	r3, #2
+ 8000dba:	43d2      	mvns	r2, r2
+ 8000dbc:	b2d1      	uxtb	r1, r2
+ 8000dbe:	4a72      	ldr	r2, [pc, #456]	; (8000f88 <main+0x29c>)
+ 8000dc0:	54d1      	strb	r1, [r2, r3]
 	  LEDMatrixBuffer[i*4+3] = LEDMatrix[i];
- 8000dbe:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000dc0:	009b      	lsls	r3, r3, #2
- 8000dc2:	3303      	adds	r3, #3
- 8000dc4:	4971      	ldr	r1, [pc, #452]	; (8000f8c <main+0x2a0>)
- 8000dc6:	6b7a      	ldr	r2, [r7, #52]	; 0x34
- 8000dc8:	440a      	add	r2, r1
- 8000dca:	7811      	ldrb	r1, [r2, #0]
- 8000dcc:	4a6e      	ldr	r2, [pc, #440]	; (8000f88 <main+0x29c>)
- 8000dce:	54d1      	strb	r1, [r2, r3]
+ 8000dc2:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000dc4:	009b      	lsls	r3, r3, #2
+ 8000dc6:	3303      	adds	r3, #3
+ 8000dc8:	4970      	ldr	r1, [pc, #448]	; (8000f8c <main+0x2a0>)
+ 8000dca:	6b7a      	ldr	r2, [r7, #52]	; 0x34
+ 8000dcc:	440a      	add	r2, r1
+ 8000dce:	7811      	ldrb	r1, [r2, #0]
+ 8000dd0:	4a6d      	ldr	r2, [pc, #436]	; (8000f88 <main+0x29c>)
+ 8000dd2:	54d1      	strb	r1, [r2, r3]
   for(int i = 0; i < 4; i++){ //function to drive the LED's
- 8000dd0:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000dd2:	3301      	adds	r3, #1
- 8000dd4:	637b      	str	r3, [r7, #52]	; 0x34
- 8000dd6:	6b7b      	ldr	r3, [r7, #52]	; 0x34
- 8000dd8:	2b03      	cmp	r3, #3
- 8000dda:	ddd9      	ble.n	8000d90 <main+0xa4>
+ 8000dd4:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000dd6:	3301      	adds	r3, #1
+ 8000dd8:	637b      	str	r3, [r7, #52]	; 0x34
+ 8000dda:	6b7b      	ldr	r3, [r7, #52]	; 0x34
+ 8000ddc:	2b03      	cmp	r3, #3
+ 8000dde:	ddd9      	ble.n	8000d94 <main+0xa8>
   }
 
   LEDMatrixStart(LEDMatrix_Address);
- 8000ddc:	2048      	movs	r0, #72	; 0x48
- 8000dde:	f7ff fe5d 	bl	8000a9c <LEDMatrixStart>
+ 8000de0:	2048      	movs	r0, #72	; 0x48
+ 8000de2:	f7ff fe5b 	bl	8000a9c <LEDMatrixStart>
 
-  LCDPrepareInt();
- 8000de2:	f7ff fc7f 	bl	80006e4 <LCDPrepareInt>
 
 
 

@@ -72,6 +72,8 @@ volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encode
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 uint8_t lastEncoderValues[5] = {0, 0, 0, 0, 0};
 
+uint8_t lastButtonState = 1; //menu encoder's button
+
 uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 
 
@@ -89,6 +91,21 @@ uint8_t LCDQueueTop[17];
 uint8_t LCDQueueBottom[17];
 uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
+
+
+//menu stuff
+typedef enum mainMenu {EncoderSettings, FaderSettings, KeypadSettings, Exit} _mainMenu;
+typedef enum menuState {StatusDisplay, MainMenu, SubMenu, SettingsActive} _menuState;
+
+_menuState menuState = StatusDisplay;
+_mainMenu mainMenuPage = EncoderSettings;
+int subMenuPage = 0;
+
+char mainMenuItems[16][16] = {"Encoder Settings", "Fader Settings", "KeypadSettings", "Exit"};
+char subMenuItems[16][16][16] = {{"Encoder 1 CC", "Encoder 1 Vel", "Exit"}, {"Encoder 2 CC", "Encoder 2 Vel", "Exit"}, {"Encoder 3 CC", "Encoder 3 Vel", "Exit"}, {"Encoder 4 CC", "Encoder 4 Vel", "Exit"},
+								 {"Fader 1 CC", "Exit"}, {"Fader 2 CC", "Exit"}, {"Fader 3 CC", "Exit"}, {"Fader 4 CC", "Exit"},
+								 {"Keypad Offset", "Exit"}
+};
 
 
 
@@ -164,6 +181,8 @@ int main(void)
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
   NVIC_SetPriorityGrouping(0U); //use standard interrupt grouping
+
+  //init stuff
   DWT_Delay_Init();
 
 
@@ -175,15 +194,15 @@ int main(void)
   LCDInit(LCD_Address);
   LEDMatrixInit(LEDMatrix_Address);
 
-  TIM2->CR1 |= 1; //enable BAM Driver
-  TIM3->CR1 |= 1; //enable encoder scan driver
-
-
   LCDClear(LCD_Address);
 
   LCDSetCursor(1, 1, LCD_Address);
 
-  //LCDWriteString("AAAA", LCD_Address);
+  LCDPrepareInt();
+
+
+  TIM2->CR1 |= 1; //enable BAM Driver
+  TIM3->CR1 |= 1; //enable encoder scan driver
 
 
 
@@ -196,7 +215,6 @@ int main(void)
 
   LEDMatrixStart(LEDMatrix_Address);
 
-  LCDPrepareInt();
 
 
 
@@ -245,6 +263,36 @@ int main(void)
 	  brightness[1] = encoderValues[2];
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
+
+
+	 uint8_t currentButtonState = ((GPIOB->IDR)&1);
+	 if (currentButtonState == 0 && lastButtonState == 1){ //button has been pressed
+		 switch (menuState){
+
+		 case StatusDisplay:
+			 menuState = MainMenu; //enter main menu
+
+		 case MainMenu:
+
+			 if(mainMenuPage == Exit){
+
+				 menuState = StatusDisplay;
+
+			 }
+			 else menuState = SubMenu;
+
+		 case SubMenu:
+			 if(subMenuItems[mainMenuPage][subMenuPage] == "Exit"){
+				 menuState = MainMenu;
+			 }
+			 else{
+
+				 menuState = SettingsActive;
+
+			 }
+
+		 }
+	 }
 
 
 
@@ -718,6 +766,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB1 PB12 PB13 PB14
                            PB15 */
