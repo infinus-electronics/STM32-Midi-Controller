@@ -109,6 +109,30 @@ char subMenuItems[16][16][16] = {{"Encoder 1 CC", "Encoder 1 Vel", "Exit"}, {"En
 
 
 
+typedef struct itemsList{ //this is the structure of a list page
+
+	struct itemsList* parentPage;
+	char listItems[16][16]; //max 16 items per page, each item can be at most 16 characters long
+	struct * childPages[16];
+
+}listPage;
+
+typedef struct paramsList{ //list of paramaters
+
+
+
+}paramsList;
+
+typedef struct parameterPage { //this is the structure of a parameter page
+
+	char description[16];
+	uint8_t* parameterValue; //what is the value of the current parameter
+
+
+}parameterPage;
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
