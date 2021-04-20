@@ -30,6 +30,7 @@
 #include "LEDMatrix.h"
 #include "Midi.h"
 #include "ADC.h"
+#include "Menu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -91,46 +92,6 @@ uint8_t LCDQueueTop[17];
 uint8_t LCDQueueBottom[17];
 uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
-
-
-//menu stuff
-typedef enum mainMenu {EncoderSettings, FaderSettings, KeypadSettings, Exit} _mainMenu;
-typedef enum menuState {StatusDisplay, MainMenu, SubMenu, SettingsActive} _menuState;
-
-_menuState menuState = StatusDisplay;
-_mainMenu mainMenuPage = EncoderSettings;
-int subMenuPage = 0;
-
-char mainMenuItems[16][16] = {"Encoder Settings", "Fader Settings", "KeypadSettings", "Exit"};
-char subMenuItems[16][16][16] = {{"Encoder 1 CC", "Encoder 1 Vel", "Exit"}, {"Encoder 2 CC", "Encoder 2 Vel", "Exit"}, {"Encoder 3 CC", "Encoder 3 Vel", "Exit"}, {"Encoder 4 CC", "Encoder 4 Vel", "Exit"},
-								 {"Fader 1 CC", "Exit"}, {"Fader 2 CC", "Exit"}, {"Fader 3 CC", "Exit"}, {"Fader 4 CC", "Exit"},
-								 {"Keypad Offset", "Exit"}
-};
-
-
-
-typedef struct itemsList{ //this is the structure of a list page
-
-	struct itemsList* parentPage;
-	char listItems[16][16]; //max 16 items per page, each item can be at most 16 characters long
-	struct * childPages[16];
-
-}listPage;
-
-typedef struct paramsList{ //list of paramaters
-
-
-
-}paramsList;
-
-typedef struct parameterPage { //this is the structure of a parameter page
-
-	char description[16];
-	uint8_t* parameterValue; //what is the value of the current parameter
-
-
-}parameterPage;
-
 
 
 /* USER CODE END PV */
@@ -291,31 +252,7 @@ int main(void)
 
 	 uint8_t currentButtonState = ((GPIOB->IDR)&1);
 	 if (currentButtonState == 0 && lastButtonState == 1){ //button has been pressed
-		 switch (menuState){
 
-		 case StatusDisplay:
-			 menuState = MainMenu; //enter main menu
-
-		 case MainMenu:
-
-			 if(mainMenuPage == Exit){
-
-				 menuState = StatusDisplay;
-
-			 }
-			 else menuState = SubMenu;
-
-		 case SubMenu:
-			 if(subMenuItems[mainMenuPage][subMenuPage] == "Exit"){
-				 menuState = MainMenu;
-			 }
-			 else{
-
-				 menuState = SettingsActive;
-
-			 }
-
-		 }
 	 }
 
 
