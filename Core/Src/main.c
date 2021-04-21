@@ -31,6 +31,7 @@
 #include "Midi.h"
 #include "ADC.h"
 #include "Menu.h"
+//#include "Menu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,7 +74,7 @@ volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encode
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 uint8_t lastEncoderValues[5] = {0, 0, 0, 0, 0};
 
-uint8_t lastButtonState = 1; //menu encoder's button
+uint8_t lastButtonState = 0; //menu encoder's button
 
 uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 
@@ -88,10 +89,15 @@ uint8_t MidiChannel = 0;
 uint8_t MidiCCFaderLUT[4] = {1, 7, 10, 11}; //which fader maps to which CC
 uint8_t MidiCCEncoderLUT[4] = {1, 7, 10, 11};
 
-uint8_t LCDQueueTop[17];
-uint8_t LCDQueueBottom[17];
+char LCDQueueTop[17];
+char LCDQueueBottom[17];
 uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
+
+
+#define MAXIMUM         5
+uint8_t dIntegrator = 0;
+uint8_t dOutput = 0;
 
 
 /* USER CODE END PV */
@@ -120,6 +126,13 @@ static void MX_NVIC_Init(void);
 void debug(){
 	GPIOA->BSRR = (1<<7);
 	GPIOA->BRR = (1<<7);
+}
+
+void clamp(int8_t* n, int8_t lo, int8_t hi){
+
+	*n = (*n) < lo ? lo : *n;
+	*n = (*n) > hi ? hi : *n;
+
 }
 
 
@@ -251,8 +264,142 @@ int main(void)
 
 
 	 uint8_t currentButtonState = ((GPIOB->IDR)&1);
-	 if (currentButtonState == 0 && lastButtonState == 1){ //button has been pressed
 
+
+	 /*
+	  *
+	  * debounce.c
+		written by Kenneth A. Kuhn
+		version 1.00
+	  */
+
+	 /* Step 1: Update the integrator based on the input signal.  Note that the
+	 integrator follows the input, decreasing or increasing towards the limits as
+	 determined by the input state (0 or 1). */
+
+	 if (currentButtonState == 0){ //button is currently depressed
+		 if(dIntegrator < MAXIMUM){
+			 dIntegrator++;
+		 }
+	 }
+	 else if(dIntegrator > 0){ //button is not depressed
+		 dIntegrator--;
+	 }
+
+	 /* Step 2: Update the output state based on the integrator.  Note that the
+	 output will only change states if the integrator has reached a limit, either
+
+	 0 or MAXIMUM. */
+
+	 if(dIntegrator == 0){
+		 dOutput = 0;
+	 }
+
+	 else if(dIntegrator >= MAXIMUM){
+		 dOutput = 1;
+		 dIntegrator = MAXIMUM; /* defensive code if integrator got corrupted */
+	 }
+
+
+
+	 if (dOutput == 1 && lastButtonState == 0){ //button has been pressed
+
+
+		 switch (status){
+
+		 case Status:
+			 //we are now entering menu mode
+			 status = Menu;
+			 menuItemSelected = 0; //start from the first item
+			 snprintf(LCDQueueTop, 17, "\x7E%s", menuItems[menuItemSelected]);
+			 snprintf(LCDQueueBottom, 17, " %s", menuItems[menuItemSelected+1]); //normally you'd have to check if there is a next item available, but since this is only the menu init, we don't have to. (We will have to in the encoder-rotated handler)
+			 LCDTopQueued = 1; //signal that we need to update the LCD
+			 LCDBottomQueued = 1;
+			 break;
+
+		 case Menu:
+			 //we are already in our menu, time to enter whatever submenu is selected (or exit)
+			 if(menuItemSelected != 4){ //we have not selected "back", go into the selected SubMenu;
+				 status = SubMenu;
+				 subMenuSelected = menuItemSelected;
+				 parameterSelected = 0; //start afresh
+				 snprintf(LCDQueueTop, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
+				 snprintf(LCDQueueBottom, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected+1)));
+				 LCDTopQueued = 1; //signal that we need to update the LCD
+				 LCDBottomQueued = 1;
+
+			 }
+
+			 else{ //exit menu back into status
+				 status = Status;
+				 snprintf(LCDQueueTop, 17, "                "); //clear LCD
+				 snprintf(LCDQueueBottom, 17, "                ");
+				 LCDTopQueued = 1; //signal that we need to update the LCD
+				 LCDBottomQueued = 1;
+			 }
+			 break;
+
+		 case SubMenu:
+
+			 if(parameterSelected != subMenuSizes[subMenuSelected]){//we have not selected "back", go into selected parameter page
+				 status = ParaSet;
+				 snprintf(LCDQueueTop, 17, "%s", (*(subMenus[subMenuSelected]+parameterSelected))); //print the current parameter on the top line
+				 snprintf(LCDQueueBottom, 17, " %d", (*(subMenus[subMenuSelected]+parameterSelected+1))); //print the current value of the parameter under question
+			 }
+			 break;
+
+		 case ParaSet:
+			 break;
+
+		 default:
+			 break;
+
+
+
+		 }
+
+
+	 }
+	 lastButtonState = dOutput;
+	 /* end button handler */
+
+	 if(((encoderValues[4] - lastEncoderValues[4]) >= 2) | ((lastEncoderValues[4] - encoderValues[4]) >= 2)){ //control encoder has been rotated
+
+		 int8_t increment = encoderValues[4]>lastEncoderValues[4] ? 1 : -1; //this control encoder is 2 counts per indent
+
+		 switch (status){
+
+		 case Menu:
+			 menuItemSelected += increment;
+			 clamp(&menuItemSelected, 0, 4);
+			 if(increment > 0 && menuItemSelected != 0){ //we advance in the menu, pointer should be in second row
+				 snprintf(LCDQueueTop, 17, " %s", menuItems[menuItemSelected-1]);
+				 snprintf(LCDQueueBottom, 17, "\x7E%s", menuItems[menuItemSelected]);
+			 }
+			 else if(menuItemSelected != 4){
+				 snprintf(LCDQueueTop, 17, "\x7E%s", menuItems[menuItemSelected]);
+				 snprintf(LCDQueueBottom, 17, " %s", menuItems[menuItemSelected+1]);
+			 }
+			 LCDTopQueued = 1; //signal that we need to update the LCD
+			 LCDBottomQueued = 1;
+			 break;
+
+		 case SubMenu:
+			 break;
+
+		 case ParaSet:
+			 break;
+
+		 default:
+			 break;
+
+
+
+
+		 }
+
+
+		 lastEncoderValues[4] = encoderValues[4];
 	 }
 
 
@@ -359,12 +506,6 @@ int main(void)
 	  }
 
 
-
-
-
-
-
-	  DWT_Delay_ms(10);
 
   }
   /* USER CODE END 3 */
