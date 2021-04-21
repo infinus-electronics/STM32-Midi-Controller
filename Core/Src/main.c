@@ -83,6 +83,8 @@ uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 uint32_t lastKeyMatrix = 0; //last state of the key matrix
 uint32_t currentKeyMatrix = 0; //current state of the key matrix
 
+uint8_t MidiCCValues[128];
+
 
 
 char LCDQueueTop[17];
@@ -261,6 +263,7 @@ int main(void)
 
   }
 
+  //memset(MidiCCValues, 0, sizeof(MidiCCValues));
 
 
   /* USER CODE END 2 */
@@ -463,11 +466,14 @@ int main(void)
 
 		  if(encoderValues[i] != lastEncoderValues[i]){
 
+
 			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], (encoderValues[i]>>1));
-			  snprintf(LCDQueueTop, 17, "Encoder %-8d", i);
-			  LCDTopQueued = 1;
-			  snprintf(LCDQueueBottom, 17, "%-16d", encoderValues[i]);
-			  LCDBottomQueued = 1;
+			  if(status == Status){
+				  snprintf(LCDQueueTop, 17, "Encoder %-8d", i);
+				  LCDTopQueued = 1;
+				  snprintf(LCDQueueBottom, 17, "%-16d", encoderValues[i]);
+				  LCDBottomQueued = 1;
+			  }
 
 			  lastEncoderValues[i] = encoderValues[i];
 

@@ -21,10 +21,10 @@
 const char menuItems[6][15] = {"Faders", "Knobs", "Knob Buttons", "Key Matrix", "Misc", "Back"};
 
 const char subMenu0[4][15] = {"Fader 1 CC", "Fader 2 CC", "Fader 3 CC", "Back"};
-const char subMenu1[9][15] = {"Knob 1 Speed", "Knob 1 CC", "Knob 2 Speed", "Knob 2 CC", "Knob 3 Speed", "Knob 3 CC", "Knob 4 Speed", "Knob 4 CC", "Back"};
+const char subMenu1[9][15] = {"Knob 1 CC", "Knob 1 Speed", "Knob 2 CC", "Knob 2 Speed", "Knob 3 CC", "Knob 3 Speed", "Knob 4 CC", "Knob 4 Speed", "Back"};
 const char subMenu2[5][15] = {"Knob 1 Note", "Knob 2 Note", "Knob 3 Note", "Knob 4 Note", "Back"};
-const char subMenu3[3][15] = {"First Note", "Master Velocity", "Back"};
-const char subMenu4[4][15] = {"Midi Channel", "Back"};
+const char subMenu3[3][15] = {"First Note", "Master Velo", "Back"};
+const char subMenu4[2][15] = {"Midi Channel", "Back"};
 const char (*subMenus[5])[15] = {subMenu0, subMenu1, subMenu2, subMenu3, subMenu4};
 const uint8_t subMenuSizes[5] = {(sizeof(subMenu0)/sizeof(subMenu0[0]))-1, (sizeof(subMenu1)/sizeof(subMenu1[0]))-1, (sizeof(subMenu2)/sizeof(subMenu2[0]))-1, (sizeof(subMenu3)/sizeof(subMenu3[0]))-1, (sizeof(subMenu4)/sizeof(subMenu4[0]))-1}; //beware of zero indexing
 
