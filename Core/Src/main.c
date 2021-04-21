@@ -30,8 +30,9 @@
 #include "LEDMatrix.h"
 #include "Midi.h"
 #include "ADC.h"
+#include "User_Params.h"
 #include "Menu.h"
-//#include "Menu.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -83,11 +84,6 @@ uint32_t lastKeyMatrix = 0; //last state of the key matrix
 uint32_t currentKeyMatrix = 0; //current state of the key matrix
 
 
-uint8_t MidiNoteLUT[20]; //which key maps to which note
-uint8_t MidiNoteOffset = 60; //which key does the bottom left button map to?
-uint8_t MidiChannel = 0;
-uint8_t MidiCCFaderLUT[4] = {1, 7, 10, 11}; //which fader maps to which CC
-uint8_t MidiCCEncoderLUT[4] = {1, 7, 10, 11};
 
 char LCDQueueTop[17];
 char LCDQueueBottom[17];
@@ -128,10 +124,31 @@ void debug(){
 	GPIOA->BRR = (1<<7);
 }
 
-void clamp(int8_t* n, int8_t lo, int8_t hi){
+static inline void clampedIncrement(int8_t* n, int8_t inc, int8_t lo, int8_t hi){
 
-	*n = (*n) < lo ? lo : *n;
-	*n = (*n) > hi ? hi : *n;
+	if((*n+inc) < lo){
+		*n = lo;
+	}
+	else if((*n+inc) > hi){
+		*n = hi;
+	}
+	else{
+		*n += inc;
+	}
+
+}
+
+static inline void uclampedIncrement(uint8_t* n, int8_t inc, uint8_t lo, uint8_t hi){
+
+	if((*n+inc) < lo){
+		*n = lo;
+	}
+	else if((*n+inc) > hi){
+		*n = hi;
+	}
+	else{
+		*n += inc;
+	}
 
 }
 
@@ -319,7 +336,7 @@ int main(void)
 
 		 case Menu:
 			 //we are already in our menu, time to enter whatever submenu is selected (or exit)
-			 if(menuItemSelected != 4){ //we have not selected "back", go into the selected SubMenu;
+			 if(menuItemSelected != MENU_SIZE){ //we have not selected "back", go into the selected SubMenu;
 				 status = SubMenu;
 				 subMenuSelected = menuItemSelected;
 				 parameterSelected = 0; //start afresh
@@ -344,11 +361,28 @@ int main(void)
 			 if(parameterSelected != subMenuSizes[subMenuSelected]){//we have not selected "back", go into selected parameter page
 				 status = ParaSet;
 				 snprintf(LCDQueueTop, 17, "%s", (*(subMenus[subMenuSelected]+parameterSelected))); //print the current parameter on the top line
-				 snprintf(LCDQueueBottom, 17, " %d", (*(subMenus[subMenuSelected]+parameterSelected+1))); //print the current value of the parameter under question
+				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected)))); //print the current value of the parameter under question
+				 LCDTopQueued = 1; //signal that we need to update the LCD
+				 LCDBottomQueued = 1;
+			 }
+
+			 else{ //exit sub menu back into main menu
+				 status = Menu;
+				 snprintf(LCDQueueTop, 17, "\x7E%s", menuItems[menuItemSelected]);
+				 snprintf(LCDQueueBottom, 17, " %s", menuItems[menuItemSelected+1]); //normally you'd have to check if there is a next item available, but since this is only the menu init, we don't have to. (We will have to in the encoder-rotated handler)
+				 LCDTopQueued = 1; //signal that we need to update the LCD
+				 LCDBottomQueued = 1;
 			 }
 			 break;
 
-		 case ParaSet:
+		 case ParaSet: //return to the SubMenu
+
+			 status = SubMenu;
+			 snprintf(LCDQueueTop, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
+			 snprintf(LCDQueueBottom, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected+1)));
+			 LCDTopQueued = 1; //signal that we need to update the LCD
+			 LCDBottomQueued = 1;
+
 			 break;
 
 		 default:
@@ -363,6 +397,9 @@ int main(void)
 	 lastButtonState = dOutput;
 	 /* end button handler */
 
+
+
+	 /* begin encoder rotated handler */
 	 if(((encoderValues[4] - lastEncoderValues[4]) >= 2) | ((lastEncoderValues[4] - encoderValues[4]) >= 2)){ //control encoder has been rotated
 
 		 int8_t increment = encoderValues[4]>lastEncoderValues[4] ? 1 : -1; //this control encoder is 2 counts per indent
@@ -370,13 +407,13 @@ int main(void)
 		 switch (status){
 
 		 case Menu:
-			 menuItemSelected += increment;
-			 clamp(&menuItemSelected, 0, 4);
+			 //menuItemSelected += increment;
+			 clampedIncrement(&menuItemSelected, increment, 0, MENU_SIZE);
 			 if(increment > 0 && menuItemSelected != 0){ //we advance in the menu, pointer should be in second row
 				 snprintf(LCDQueueTop, 17, " %s", menuItems[menuItemSelected-1]);
 				 snprintf(LCDQueueBottom, 17, "\x7E%s", menuItems[menuItemSelected]);
 			 }
-			 else if(menuItemSelected != 4){
+			 else if(menuItemSelected != MENU_SIZE){
 				 snprintf(LCDQueueTop, 17, "\x7E%s", menuItems[menuItemSelected]);
 				 snprintf(LCDQueueBottom, 17, " %s", menuItems[menuItemSelected+1]);
 			 }
@@ -385,9 +422,25 @@ int main(void)
 			 break;
 
 		 case SubMenu:
+			 //parameterSelected += increment;
+			 clampedIncrement(&parameterSelected, increment, 0, subMenuSizes[subMenuSelected]);
+			 if(increment > 0 && parameterSelected != 0){ //we advance in the menu, pointer should be in second row
+				 snprintf(LCDQueueTop, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected-1)));
+				 snprintf(LCDQueueBottom, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
+			 }
+			 else if(parameterSelected != subMenuSizes[subMenuSelected]){
+				 snprintf(LCDQueueTop, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
+				 snprintf(LCDQueueBottom, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected+1)));
+			 }
+			 LCDTopQueued = 1; //signal that we need to update the LCD
+			 LCDBottomQueued = 1;
 			 break;
 
 		 case ParaSet:
+			 //*(*(parameters[subMenuSelected]+parameterSelected)) += increment;
+			 uclampedIncrement((*(parameters[subMenuSelected]+parameterSelected)),increment, *(parameterLBs[subMenuSelected]+parameterSelected), *(parameterUBs[subMenuSelected]+parameterSelected));
+			 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected)))); //print the current value of the parameter under question
+			 LCDBottomQueued = 1;
 			 break;
 
 		 default:
@@ -401,6 +454,7 @@ int main(void)
 
 		 lastEncoderValues[4] = encoderValues[4];
 	 }
+	 /* end encoder rotated handler */
 
 
 
