@@ -7,7 +7,7 @@
 
 #include "LEDMatrix.h"
 
-uint8_t LEDMatrix[4] = {0b10101010, 0b01010101, 0b11110000, 0b00001111}; //current state of the LED Matrix per row
+uint8_t LEDMatrix[4] = {0,0,0,0}; //current state of the LED Matrix per row
 uint8_t LEDMatrixBuffer[16];
 volatile uint8_t currentLEDRow = 0;
 

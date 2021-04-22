@@ -234,6 +234,22 @@ int main(void)
   TIM3->CR1 |= 1; //enable encoder scan driver
 
 
+  //indicate where are all the note C's
+  for(int8_t i = 0; i < 4; i++){
+	  LEDMatrix[i] &= 0xf; //clear all the red channels
+  }
+
+  for(int8_t i = 0; i < 16; i++){ //we have 16 keys
+
+	  int8_t row = 3-(i>>2);
+	  int8_t col = (i%4);
+	  if((MidiNoteOffset+i)%12 == 0){ //this key is a C
+		  LEDMatrix[row] |= (1<<(4+col));
+	  }
+
+  }
+
+
 
   for(int i = 0; i < 4; i++){ //function to drive the LED's
 	  LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
@@ -459,9 +475,39 @@ int main(void)
 		 case ParaSet:
 
 			 clampedIncrement((*(parameters[subMenuSelected]+parameterSelected)), increment, (*(parameterLBs[subMenuSelected]+parameterSelected)), (*(parameterUBs[subMenuSelected]+parameterSelected)));
-			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){ //if we are changing notenames
+
+			 //if we are changing notenames
+			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){
 				 snprintf(LCDQueueBottom, 17, "%s%d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1)); //print the NOTENAME of the parameter under question
 			 }
+
+			 //update red LED's to indicate positions of C
+			 if(subMenuSelected == 3 && parameterSelected == 0){
+
+				 for(int8_t i = 0; i < 4; i++){
+					 LEDMatrix[i] &= 0xf; //clear all the red channels
+				 }
+
+				 for(int8_t i = 0; i < 16; i++){ //we have 16 keys
+
+					 int8_t row = 3-(i>>2);
+					 int8_t col = (i%4);
+					 if((MidiNoteOffset+i)%12 == 0){ //this key is a C
+						 LEDMatrix[row] |= (1<<(4+col));
+					 }
+
+				 }
+				 for(int i = 0; i < 4; i++){ //function to drive the LED's
+
+					 LEDMatrixBuffer[i*4] = 0b1111; //clear all pins first to prevent ghosting
+					 LEDMatrixBuffer[i*4+1] = 0x00;
+					 LEDMatrixBuffer[i*4+2] = ~(1<<i);
+					 LEDMatrixBuffer[i*4+3] = LEDMatrix[i];
+
+				 }
+			 }
+
+			 //nothing special
 			 else{
 				 //snprintf(LCDQueueBottom, 17, "%d", *(parameterLBs[subMenuSelected]+parameterSelected));
 				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected))));//print the current value of the parameter under question
@@ -560,8 +606,8 @@ int main(void)
 
 		  //handle keys here
 		  for(int i = 0; i < 4; i++){
-
-			  LEDMatrix[3-i] = (currentKeyMatrix >> ((5*i)+1)) & 0b1111;
+			  LEDMatrix[3-i] &= 0xf0; //clear the greens
+			  LEDMatrix[3-i] |= (currentKeyMatrix >> ((5*i)+1)) & 0b1111;
 			  //LEDMatrix[3-i] = (1<<i); //FRAK ZERO INDEXING alkfjngkjkfla (originally the idiot me had 4-i)
 			  //hmmm, but on a more serious note tho, why is this array out of bounds not detected... that's definitely something to keep in mind
 		  }
