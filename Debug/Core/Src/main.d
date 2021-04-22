@@ -41,7 +41,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_ctlreq.h \
  ../Core/Src/DWT_Delay.h ../Core/Src/LCD.h ../Core/Src/LEDMatrix.h \
  ../Core/Src/Midi.h ../Core/Src/ADC.h ../Core/Src/User_Params.h \
- ../Core/Src/Menu.h
+ ../Core/Src/Menu.h ../Core/Src/EEPROM.h
 
 ../Core/Inc/main.h:
 
@@ -140,3 +140,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Src/User_Params.h:
 
 ../Core/Src/Menu.h:
+
+../Core/Src/EEPROM.h:

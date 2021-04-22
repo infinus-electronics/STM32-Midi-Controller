@@ -32,7 +32,7 @@
 #include "ADC.h"
 #include "User_Params.h"
 #include "Menu.h"
-
+#include "EEPROM.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,7 +96,8 @@ uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
 
 
-#define MAXIMUM         15
+
+#define MAXIMUM  15
 int8_t dIntegrator = 0;
 int8_t dOutput = 0;
 
@@ -214,6 +215,122 @@ int main(void)
   //init stuff
   DWT_Delay_Init();
 
+ /*
+  //read in all user parameters from the EEPROM
+  I2C2->CR1 |= (1<<8); //send start condition
+  while ((I2C2->SR1 & 1) == 0); //clear SB
+  I2C2->DR = 0xA0; //address the EEPROM
+  while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+  while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = 0x0; //write to GPIO_A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = 0x0; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiNoteOffset; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiNoteVelo; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiChannel; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCFaderLUT[0]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCFaderLUT[1]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCFaderLUT[2]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCEncoderLUT[0]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCEncoderLUT[1]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCEncoderLUT[2]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = MidiCCEncoderLUT[3]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderSpeed[0]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderSpeed[1]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderSpeed[2]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderSpeed[3]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderNote[0]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderNote[1]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderNote[2]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = EncoderNote[3]; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = filterBeta; //present data at output bank A
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
+  I2C2->CR1 |= (1<<9); //send stop condition
+*/
+
+  //read in all user parameters from the EEPROM
+  I2C2->CR1 |= (1<<8); //send start condition
+
+  while ((I2C2->SR1 & 1) == 0); //clear SB
+  I2C2->DR = 0xA0; //address the EEPROM in write mode
+  while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+  while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = 0x0; //address
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  I2C2->DR = 0x0; //address
+  while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+  while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
+  I2C2->CR1 |= 1<<10;
+  I2C2->CR1 |= (1<<8); //send start condition
+  while ((I2C2->SR1 & 1) == 0); //clear SB
+  I2C2->DR = 0xA1; //address the EEPROM in read mode
+  while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+  while ((I2C2->SR2) & 0); //read I2C SR2
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiNoteOffset = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiNoteVelo = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiChannel = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCFaderLUT[0] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCFaderLUT[1] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCFaderLUT[2] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCEncoderLUT[0] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCEncoderLUT[1] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCEncoderLUT[2] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  MidiCCEncoderLUT[3] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderSpeed[0] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderSpeed[1] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderSpeed[2] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderSpeed[3] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderNote[0] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderNote[1] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderNote[2] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  EncoderNote[3] = (I2C2->DR) & 0xff;
+  while ((I2C2->SR1 & 1<<6) == 0); //wait for RXNE
+  I2C2->CR1 &= ~(1<<10); //NACK
+  I2C2->CR1 |= 1<<9; //STOP
+  filterBeta = I2C2->DR;
+
+
+  DWT_Delay_ms(50); //let stuff settle down properly
 
   IWDG->KR = 0xAAAA; //reset the watchdog timer
   blocked = 0;
@@ -645,6 +762,8 @@ int main(void)
 
 
 	  if(!isLCDPrinting){ //update LCD here
+		  //assumption: at most only one parameter will be changed with each loop, therefore, only allow for 1 queued write
+
 		  if(LCDTopQueued){
 			  LCDPrintStringTop(LCDQueueTop);
 			  LCDTopQueued = 0;
