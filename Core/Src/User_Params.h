@@ -18,5 +18,8 @@ int8_t MidiCCEncoderLUT[4] = {1, 7, 10, 11};
 int8_t EncoderSpeed[4] = {1, 1, 1, 1};
 int8_t EncoderNote[4] = {60, 60, 60, 60};
 
+#define MAX_FILTER_BETA 16
+int8_t filterBeta = 6;
+
 
 #endif /* SRC_USER_PARAMS_H_ */

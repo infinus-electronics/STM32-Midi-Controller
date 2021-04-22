@@ -9,7 +9,7 @@
 #define SRC_ADC_H_
 
 
-int ADC1ReadVal8(uint8_t channel); //returns an 8 bit value
+int ADC1ReadVal(uint8_t channel); //returns a 12 bit value
 
 
 #endif /* SRC_ADC_H_ */

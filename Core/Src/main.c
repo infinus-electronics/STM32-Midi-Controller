@@ -77,13 +77,16 @@ int lastEncoderValues[5] = {0, 0, 0, 0, 0};
 
 uint8_t lastButtonState = 0; //menu encoder's button
 
-uint8_t lastFaderValues[4] = {0, 0, 0, 0};
+
 
 
 uint32_t lastKeyMatrix = 0; //last state of the key matrix
 uint32_t currentKeyMatrix = 0; //current state of the key matrix
 
 int8_t MidiCCValues[128];
+
+int adcSmooth[3]; //adc data after its passed thru the IIR filter
+int lastFaderValues[3] = {0, 0, 0};
 
 
 
@@ -254,14 +257,14 @@ int main(void)
 
   }
 
-  for(int i = 0; i < 4; i++){
+  for(int i = 1; i < 4; i++){
 
-	  int currentADC = ADC1ReadVal8(i);
-	  currentADC += ADC1ReadVal8(i);
-	  currentADC += ADC1ReadVal8(i);
+	  int currentADC = ADC1ReadVal(i);
+	  currentADC += ADC1ReadVal(i);
+	  currentADC += ADC1ReadVal(i);
 	  currentADC = currentADC/3;
 
-	  lastFaderValues[i] = currentADC;
+	  lastFaderValues[i-1] = currentADC >> 5;
 
 
   }
@@ -504,22 +507,41 @@ int main(void)
 	  }
 	  /*end CC encoder handler*/
 
-	  for(int i = 1; i < 4; i++){
+	  /*begin ADC handler*/
+	  for(int j = 1; j < 4; j++){
 
-		  int currentADC = ADC1ReadVal8(i);
-		  currentADC += ADC1ReadVal8(i);
-		  currentADC += ADC1ReadVal8(i);
-		  currentADC = currentADC/3;
+		  int i = j-1;
+		  int currentADC = ADC1ReadVal(j);
+		  //IIR filter https://kiritchatterjee.wordpress.com/2014/11/10/a-simple-digital-low-pass-filter-in-c/
+		  //but we are working in 12 bit fixed point anyways
+		  adcSmooth[i] = (adcSmooth[i] << filterBeta) - adcSmooth[i];
+		  adcSmooth[i] += currentADC;
+		  adcSmooth[i] = adcSmooth[i] >> filterBeta;
 
-		  if(abs(currentADC - lastFaderValues[i]) > 3){ // this particular ADC Channel has been updated
+		  currentADC = adcSmooth[i] >> 5; //convert the filter output to 7 bit, and store it currentADC
+		  //Note: lastFaderValues[i] is 7 bit
 
-			  MidiCC(MidiChannel, MidiCCFaderLUT[i], (currentADC>>1));
+
+		  if(lastFaderValues[i] != currentADC){ // this particular ADC Channel has been updated
+
+			  MidiCCValues[MidiCCFaderLUT[i]] = currentADC;
+
+			  MidiCC(MidiChannel, MidiCCFaderLUT[i], MidiCCValues[MidiCCFaderLUT[i]]);
+
+			  if(status == Status){
+				  snprintf(LCDQueueTop, 17, "CC %d", MidiCCFaderLUT[i]);
+				  LCDTopQueued = 1;
+				  snprintf(LCDQueueBottom, 17, "%-16d", MidiCCValues[MidiCCFaderLUT[i]]);
+				  LCDBottomQueued = 1;
+			  }
+
+
 			  lastFaderValues[i] = currentADC;
 
 		  }
 
 	  }
-
+	  /*end ADC handler*/
 
 
 
