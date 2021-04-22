@@ -39,7 +39,7 @@ int8_t **parameters[8] = {parameters0, parameters1, parameters2, parameters3, pa
 //lower bounds for all parameters
 const int8_t parameterLB0[8] = {0, 0, 0};
 const int8_t parameterLB1[8] = {0, 1, 0, 1, 0, 1, 0, 1};
-const int8_t parameterLB2[8] = {31, 0, 0, 0};
+const int8_t parameterLB2[8] = {0, 0, 0, 0};
 const int8_t parameterLB3[8] = {0, 0};
 const int8_t parameterLB4[8] = {0};
 const int8_t *parameterLBs[5] = {parameterLB0, parameterLB1, parameterLB2, parameterLB3, parameterLB4};

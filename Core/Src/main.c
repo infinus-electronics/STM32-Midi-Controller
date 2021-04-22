@@ -93,7 +93,7 @@ uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
 
 
-#define MAXIMUM         10
+#define MAXIMUM         15
 int8_t dIntegrator = 0;
 int8_t dOutput = 0;
 
@@ -132,11 +132,9 @@ void clampedIncrement(int8_t* n, int8_t inc, int8_t lo, int8_t hi){
 	int temp = a + inc;
 
 	if(temp < lo){
-		brightness[0] += 10;
 		*n = lo;
 	}
 	else if(temp > hi){
-		brightness[0] += -2;
 		*n = hi;
 	}
 	else{
@@ -145,7 +143,7 @@ void clampedIncrement(int8_t* n, int8_t inc, int8_t lo, int8_t hi){
 
 }
 
-
+/*
 //screw unsigned types....sigh...this crap wasted hours of my life
 void uclampedIncrement(uint8_t* n, int8_t inc, uint8_t lo, uint8_t hi){
 
@@ -163,6 +161,7 @@ void uclampedIncrement(uint8_t* n, int8_t inc, uint8_t lo, uint8_t hi){
 	}
 
 }
+*/
 
 
 /* USER CODE END 0 */
@@ -374,7 +373,12 @@ int main(void)
 			 if(parameterSelected != subMenuSizes[subMenuSelected]){//we have not selected "back", go into selected parameter page
 				 status = ParaSet;
 				 snprintf(LCDQueueTop, 17, "%s", (*(subMenus[subMenuSelected]+parameterSelected))); //print the current parameter on the top line
-				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected)))); //print the current value of the parameter under question
+				 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){ //if we are changing notenames
+					 snprintf(LCDQueueBottom, 17, "%s%d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1)); //print the NOTENAME of the parameter under question
+				 }
+				 else{
+					 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected)))); //print the current value of the parameter under question
+				 }
 				 LCDTopQueued = 1; //signal that we need to update the LCD
 				 LCDBottomQueued = 1;
 			 }
@@ -453,7 +457,7 @@ int main(void)
 
 			 clampedIncrement((*(parameters[subMenuSelected]+parameterSelected)), increment, (*(parameterLBs[subMenuSelected]+parameterSelected)), (*(parameterUBs[subMenuSelected]+parameterSelected)));
 			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){ //if we are changing notenames
-				 snprintf(LCDQueueBottom, 17, "%s%d %d %d %d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1), *(parameterLBs[subMenuSelected]+parameterSelected), increment, status); //print the NOTENAME of the parameter under question
+				 snprintf(LCDQueueBottom, 17, "%s%d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1)); //print the NOTENAME of the parameter under question
 			 }
 			 else{
 				 //snprintf(LCDQueueBottom, 17, "%d", *(parameterLBs[subMenuSelected]+parameterSelected));
