@@ -11,4 +11,4 @@ stm32f1xx_it.c:225:6:DMA1_Channel6_IRQHandler	8	static
 stm32f1xx_it.c:242:6:USB_LP_CAN1_RX0_IRQHandler	8	static
 stm32f1xx_it.c:256:6:TIM2_IRQHandler	8	static
 stm32f1xx_it.c:337:6:TIM3_IRQHandler	16	static
-stm32f1xx_it.c:378:6:I2C2_EV_IRQHandler	8	static
+stm32f1xx_it.c:381:6:I2C2_EV_IRQHandler	8	static

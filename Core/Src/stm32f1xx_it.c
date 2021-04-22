@@ -343,9 +343,12 @@ void TIM3_IRQHandler(void)
 	uint8_t index = (lastEncoder[currentEncoder]<<2) | currentReadoff;
 	encoderValues[currentEncoder] += encoderLUT[index];
 
+	//DOH!!! you wont have enough room to constrain anything in the beginning!!!! THIS BROKE SO MUCH STUFF....
+	/*
 	//constrain encoderValues
 	if(encoderValues[currentEncoder] > 255) encoderValues[currentEncoder] = 255;
 	if(encoderValues[currentEncoder] < 0) encoderValues[currentEncoder] = 0;
+	*/
 
 	lastEncoder[currentEncoder] = currentReadoff;
 

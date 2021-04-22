@@ -73,7 +73,7 @@ volatile uint8_t currentEncoder = 0; //which encoder are we polling right now?
 volatile uint8_t lastEncoder[5] = {0,0,0,0,0};//initialize array containing past encoder readoff
 volatile int encoderValues[5] = {0,0,0,0,0};//initialize array containing encoder values
 volatile int8_t encoderLUT[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
-uint8_t lastEncoderValues[5] = {0, 0, 0, 0, 0};
+int lastEncoderValues[5] = {0, 0, 0, 0, 0};
 
 uint8_t lastButtonState = 0; //menu encoder's button
 
@@ -83,7 +83,7 @@ uint8_t lastFaderValues[4] = {0, 0, 0, 0};
 uint32_t lastKeyMatrix = 0; //last state of the key matrix
 uint32_t currentKeyMatrix = 0; //current state of the key matrix
 
-uint8_t MidiCCValues[128];
+int8_t MidiCCValues[128];
 
 
 
@@ -93,9 +93,9 @@ uint8_t LCDTopQueued; //does the LCD have to be updated this round?
 uint8_t LCDBottomQueued;
 
 
-#define MAXIMUM         5
-uint8_t dIntegrator = 0;
-uint8_t dOutput = 0;
+#define MAXIMUM         10
+int8_t dIntegrator = 0;
+int8_t dOutput = 0;
 
 
 /* USER CODE END PV */
@@ -126,30 +126,40 @@ void debug(){
 	GPIOA->BRR = (1<<7);
 }
 
-static inline void clampedIncrement(int8_t* n, int8_t inc, int8_t lo, int8_t hi){
+void clampedIncrement(int8_t* n, int8_t inc, int8_t lo, int8_t hi){
 
-	if((*n+inc) < lo){
+	int a = *n;
+	int temp = a + inc;
+
+	if(temp < lo){
+		brightness[0] += 10;
 		*n = lo;
 	}
-	else if((*n+inc) > hi){
+	else if(temp > hi){
+		brightness[0] += -2;
 		*n = hi;
 	}
 	else{
-		*n += inc;
+		*n = (int8_t)temp;
 	}
 
 }
 
-static inline void uclampedIncrement(uint8_t* n, int8_t inc, uint8_t lo, uint8_t hi){
 
-	if((*n+inc) < lo){
-		*n = lo;
+//screw unsigned types....sigh...this crap wasted hours of my life
+void uclampedIncrement(uint8_t* n, int8_t inc, uint8_t lo, uint8_t hi){
+
+	int temp = (int)*n + (int)inc;
+
+	if(temp < 0){
+		brightness[0] += 5;
+		*n = 0;
 	}
-	else if((*n+inc) > hi){
+	else if(temp > hi){
 		*n = hi;
 	}
 	else{
-		*n += inc;
+		*n = (uint8_t)temp;
 	}
 
 }
@@ -277,7 +287,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  brightness[0] = encoderValues[3];
+	  //brightness[0] = encoderValues[3];
 	  brightness[1] = encoderValues[2];
 	  brightness[2] = encoderValues[1];
 	  brightness[3] = encoderValues[0];
@@ -410,7 +420,7 @@ int main(void)
 		 switch (status){
 
 		 case Menu:
-			 //menuItemSelected += increment;
+
 			 clampedIncrement(&menuItemSelected, increment, 0, MENU_SIZE);
 			 if(increment > 0 && menuItemSelected != 0){ //we advance in the menu, pointer should be in second row
 				 snprintf(LCDQueueTop, 17, " %s", menuItems[menuItemSelected-1]);
@@ -425,7 +435,7 @@ int main(void)
 			 break;
 
 		 case SubMenu:
-			 //parameterSelected += increment;
+
 			 clampedIncrement(&parameterSelected, increment, 0, subMenuSizes[subMenuSelected]);
 			 if(increment > 0 && parameterSelected != 0){ //we advance in the menu, pointer should be in second row
 				 snprintf(LCDQueueTop, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected-1)));
@@ -440,9 +450,15 @@ int main(void)
 			 break;
 
 		 case ParaSet:
-			 //*(*(parameters[subMenuSelected]+parameterSelected)) += increment;
-			 uclampedIncrement((*(parameters[subMenuSelected]+parameterSelected)),increment, *(parameterLBs[subMenuSelected]+parameterSelected), *(parameterUBs[subMenuSelected]+parameterSelected));
-			 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected)))); //print the current value of the parameter under question
+
+			 clampedIncrement((*(parameters[subMenuSelected]+parameterSelected)), increment, (*(parameterLBs[subMenuSelected]+parameterSelected)), (*(parameterUBs[subMenuSelected]+parameterSelected)));
+			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){ //if we are changing notenames
+				 snprintf(LCDQueueBottom, 17, "%s%d %d %d %d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1), *(parameterLBs[subMenuSelected]+parameterSelected), increment, status); //print the NOTENAME of the parameter under question
+			 }
+			 else{
+				 //snprintf(LCDQueueBottom, 17, "%d", *(parameterLBs[subMenuSelected]+parameterSelected));
+				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected))));//print the current value of the parameter under question
+			 }
 			 LCDBottomQueued = 1;
 			 break;
 
