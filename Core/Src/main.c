@@ -286,10 +286,10 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  //brightness[0] = encoderValues[3];
-	  brightness[1] = encoderValues[2];
-	  brightness[2] = encoderValues[1];
-	  brightness[3] = encoderValues[0];
+	  brightness[0] = MidiCCValues[MidiCCEncoderLUT[3]] << 1;
+	  brightness[1] = MidiCCValues[MidiCCEncoderLUT[2]] << 1;
+	  brightness[2] = MidiCCValues[MidiCCEncoderLUT[1]] << 1;
+	  brightness[3] = MidiCCValues[MidiCCEncoderLUT[0]] << 1;
 
 
 	 uint8_t currentButtonState = ((GPIOB->IDR)&1);
@@ -330,7 +330,7 @@ int main(void)
 	 }
 
 
-
+	 /*begin button handler*/
 	 if (dOutput == 1 && lastButtonState == 0){ //button has been pressed
 
 
@@ -416,7 +416,7 @@ int main(void)
 
 
 
-	 /* begin encoder rotated handler */
+	 /* begin control encoder rotated handler */
 	 if(((encoderValues[4] - lastEncoderValues[4]) >= 2) | ((lastEncoderValues[4] - encoderValues[4]) >= 2)){ //control encoder has been rotated
 
 		 int8_t increment = encoderValues[4]>lastEncoderValues[4] ? 1 : -1; //this control encoder is 2 counts per indent
@@ -477,21 +477,23 @@ int main(void)
 
 		 lastEncoderValues[4] = encoderValues[4];
 	 }
-	 /* end encoder rotated handler */
+	 /* end control encoder rotated handler */
 
 
 
-
+	 /*begin CC encoder handler*/
 	  for(int i = 0; i < 4; i++){ //send encoder CC Values
 
-		  if(encoderValues[i] != lastEncoderValues[i]){
+		  if(encoderValues[i] != lastEncoderValues[i]){ //encoder was rotated
 
+			  int8_t increment = encoderValues[i] > lastEncoderValues[i] ? 1 : -1;
+			  clampedIncrement(&MidiCCValues[MidiCCEncoderLUT[i]], increment*EncoderSpeed[i], 0, 127);
+			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], MidiCCValues[MidiCCEncoderLUT[i]]);
 
-			  MidiCC(MidiChannel, MidiCCEncoderLUT[i], (encoderValues[i]>>1));
 			  if(status == Status){
-				  snprintf(LCDQueueTop, 17, "Encoder %-8d", i);
+				  snprintf(LCDQueueTop, 17, "CC %d", MidiCCEncoderLUT[i]);
 				  LCDTopQueued = 1;
-				  snprintf(LCDQueueBottom, 17, "%-16d", encoderValues[i]);
+				  snprintf(LCDQueueBottom, 17, "%-16d", MidiCCValues[MidiCCEncoderLUT[i]]);
 				  LCDBottomQueued = 1;
 			  }
 
@@ -500,6 +502,7 @@ int main(void)
 		  }
 
 	  }
+	  /*end CC encoder handler*/
 
 	  for(int i = 1; i < 4; i++){
 

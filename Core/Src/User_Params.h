@@ -8,7 +8,7 @@
 #ifndef SRC_USER_PARAMS_H_
 #define SRC_USER_PARAMS_H_
 
-
+#define MAX_ENCODER_SPEED 6
 int8_t MidiNoteLUT[20]; //which key maps to which note
 int8_t MidiNoteOffset = 60; //which key does the bottom left button map to?
 int8_t MidiNoteVelo = 127;

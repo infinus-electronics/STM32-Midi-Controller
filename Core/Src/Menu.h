@@ -46,7 +46,7 @@ const int8_t *parameterLBs[5] = {parameterLB0, parameterLB1, parameterLB2, param
 
 //lower bounds for all parameters
 const int8_t parameterUB0[8] = {127, 127, 127};
-const int8_t parameterUB1[8] = {127, 4, 127, 4, 127, 4, 127, 4};
+const int8_t parameterUB1[8] = {127, MAX_ENCODER_SPEED, 127, MAX_ENCODER_SPEED, 127, MAX_ENCODER_SPEED, 127, MAX_ENCODER_SPEED};
 const int8_t parameterUB2[8] = {127, 127, 127, 127};
 const int8_t parameterUB3[8] = {93, 127};
 const int8_t parameterUB4[8] = {15};
