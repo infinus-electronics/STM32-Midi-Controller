@@ -33,6 +33,7 @@
 #include "User_Params.h"
 #include "Menu.h"
 #include "EEPROM.h"
+#include "MovingAverage.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -394,13 +395,16 @@ int main(void)
 
   }
 
+
+  IWDG->KR = 0xAAAA; //reset the watchdog timer
   for(int i = 1; i < 4; i++){
 
-	  int currentADC = ADC1ReadVal(i);
-	  currentADC += ADC1ReadVal(i);
-	  currentADC += ADC1ReadVal(i);
-	  currentADC = currentADC/3;
-
+	  initMovingAverage(inputBuffer[i], &sum[i], &oldestPos[i]);
+	  int currentADC;
+	  for(int j = 0; j < NAverages; j++){
+		  currentADC = ADC1ReadVal(i);
+		  currentADC = movingAverage(inputBuffer[i], &sum[i], &oldestPos[i], NAverages, currentADC); //service it N times to fill in the buffer
+	  }
 	  lastFaderValues[i-1] = currentADC >> 5;
 
 
@@ -684,6 +688,8 @@ int main(void)
 
 		  int i = j-1;
 		  int currentADC = ADC1ReadVal(j);
+
+		  /*
 		  //IIR filter https://kiritchatterjee.wordpress.com/2014/11/10/a-simple-digital-low-pass-filter-in-c/
 		  //but we are working in 12 bit fixed point anyways
 		  adcSmooth[i] = (adcSmooth[i] << filterBeta) - adcSmooth[i];
@@ -693,6 +699,11 @@ int main(void)
 		  currentADC = adcSmooth[i] >> 5; //convert the filter output to 7 bit, and store it currentADC
 		  //Note: lastFaderValues[i] is 7 bit
 		  //Note: this is NOT division for signed ints, due to the sign bit in front
+		   *
+		   *
+		   */
+		  currentADC = movingAverage(inputBuffer[i], &sum[i], &oldestPos[i], NAverages, currentADC);
+		  currentADC = (currentADC >> 5) & 0x7f; //convert to 7 bit
 
 
 		  if(lastFaderValues[i] != currentADC){ // this particular ADC Channel has been updated
