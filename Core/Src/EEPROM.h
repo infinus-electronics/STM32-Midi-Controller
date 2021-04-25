@@ -25,9 +25,6 @@
  * 18 Filter Beta
  */
 
-extern uint8_t EEPROMQueued;
-extern uint8_t EEPROMData;
-extern uint16_t EEPROMAddress;
 
 
 //implement a FIFO

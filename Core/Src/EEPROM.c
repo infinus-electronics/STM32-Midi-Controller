@@ -8,10 +8,6 @@
 
 #include "EEPROM.h"
 
-uint8_t EEPROMQueued = 0;
-uint8_t EEPROMData = 0;
-uint16_t EEPROMAddress = 0;
-
 
 //implement a FIFO
 uint8_t eepromDataQueue[64];
