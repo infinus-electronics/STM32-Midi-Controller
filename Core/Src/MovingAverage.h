@@ -14,9 +14,9 @@
 //reference: https://gist.github.com/bmccormack/d12f4bf0c96423d03f82
 
 #define NUM_CHANNELS 4
-#define MAX_N_AVERAGES 64
+#define MAX_N_AVERAGES 256
 
-extern int8_t NAverages;
+extern uint8_t NAverages;
 
 int inputBuffer[NUM_CHANNELS][MAX_N_AVERAGES];
 int oldestPos[NUM_CHANNELS];

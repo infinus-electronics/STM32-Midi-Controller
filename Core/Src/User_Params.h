@@ -21,7 +21,7 @@ int8_t EncoderNote[4] = {60, 60, 60, 60};
 #define MAX_FILTER_BETA 16
 int8_t filterBeta = 7;
 
-int8_t NAverages = 16;
+uint8_t NAverages = 255;
 
 
 #endif /* SRC_USER_PARAMS_H_ */
