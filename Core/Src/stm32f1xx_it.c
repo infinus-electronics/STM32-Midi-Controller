@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include "LEDMatrix.h"
 #include "LCD.h"
+#include "EEPROM.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,6 +59,8 @@ extern volatile uint8_t encoderChanged[5];
 
 extern volatile uint8_t updateLCD;
 extern volatile uint8_t cycleEN;
+
+volatile uint8_t EEPROMWriting = 0; //are we in the middle of an EEPROMWrite?
 
 /* USER CODE END PV */
 
@@ -381,11 +384,26 @@ void TIM3_IRQHandler(void)
 void I2C2_EV_IRQHandler(void)
 {
   /* USER CODE BEGIN I2C2_EV_IRQn 0 */
+
 	if(I2C2->SR1 & (1<<2)){ //BTF is set
 
 
-		//I2C2->CR2 &= ~(1<<11); //disable I2C2 DMA requesting
-		//I2C2->CR1 |= (1<<9); //send stop condition
+		if(EEPROMWriting){ //we are in the middle of an EEPROMWrite
+
+			if(outputEEPROMBufferPosition != inputEEPROMBufferPosition){ //we still have data queued
+				I2C2->DR = eepromDataQueue[outputEEPROMBufferPosition]; //load the current byte into the eeprom
+				outputEEPROMBufferPosition = ((outputEEPROMBufferPosition + 1) % (sizeof(eepromDataQueue)/sizeof(eepromDataQueue[0]))); //advance the output pointer
+			}
+			else{ //we are done with the EEPROM, clear everything
+
+				I2C2->CR1 |= (1<<9); //send stop condition
+
+				isLCDPrinting = 0; //mark the I2C Bus as free for the next LCD Request
+				EEPROMWriting = 0; //mark the EEPROM Writing process as done
+
+				I2C2->CR2 &= ~(1<<9); //disable I2C2 Event Interrupt
+			}
+		}
 
 
 
@@ -408,7 +426,7 @@ void I2C2_EV_IRQHandler(void)
 
 		}
 
-		if(currentLCDByte == 0){
+		if(currentLCDByte == 0 && EEPROMWriting == 0){
 
 			// we're done with the command byte, set RS
 			GPIOB->BSRR = (1<<1);
@@ -417,17 +435,39 @@ void I2C2_EV_IRQHandler(void)
 			I2C2->DR = LCDBufferTop[currentLCDByte-1];
 			//I2C2->DR = 0x42;
 		}
-		else if(currentLCDByte == 17){
+		else if(currentLCDByte == 17 && EEPROMWriting == 0){ //if we are done with the LCD, but the EEPROM is not in the middle of a write to prevent restarting
 
 			//we're done with all characters, disable cycleEN
 			cycleEN = 0;
 
+
 			I2C2->CR1 |= (1<<9); //send stop condition
 			I2C2->CR2 &= ~(1<<9); //disable I2C2 Event Interrupt
-			isLCDPrinting = 0;
+
+			if(outputEEPROMBufferPosition != inputEEPROMBufferPosition){ //we have data queued in the eeprom fifo, initiate a write
+
+
+				EEPROMWriting = 1; //mark that we are now flushing data out to the EEPROM
+				//I2C2->CR2 &= ~(1<<9); //disable I2C2 Event Interrupt
+				I2C2->CR1 &= ~(1<<8);
+				I2C2->CR1 |= 1<<8; //send start condition
+
+				while ((I2C2->SR1 & 1) == 0); //clear SB
+				I2C2->DR = 0xA0; //address the EEPROM
+				while ((I2C2->SR1 & (1<<1)) == 0); //wait for ADDR flag
+				while ((I2C2->SR2 & (1<<2)) == 0); //read I2C SR2
+				while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
+				I2C2->DR = eepromDataQueue[outputEEPROMBufferPosition]; //load the current byte into the eeprom
+				I2C2->CR2 |= (1<<9); //disable I2C2 Event Interrupt
+				outputEEPROMBufferPosition = ((outputEEPROMBufferPosition + 1) % (sizeof(eepromDataQueue)/sizeof(eepromDataQueue[0]))); //advance the output pointer
+			}
+			else{
+
+				isLCDPrinting = 0; //mark the I2C Bus as free for the next LCD Request
+			}
 
 		}
-		else{
+		else if(EEPROMWriting == 0){ //only load in LCD Data if we are not in the middle of an EEPROM write
 
 			currentLCDByte++;
 			//load in next byte into DR here
@@ -435,6 +475,8 @@ void I2C2_EV_IRQHandler(void)
 			I2C2->DR = LCDBufferTop[currentLCDByte-1];
 			//I2C2->DR = 0x42;
 		}
+
+
 
 
 

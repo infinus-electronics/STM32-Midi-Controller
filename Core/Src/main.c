@@ -215,8 +215,8 @@ int main(void)
   //init stuff
   DWT_Delay_Init();
 
- /*
-  //read in all user parameters from the EEPROM
+/*
+  //write in all user parameters to the EEPROM
   I2C2->CR1 |= (1<<8); //send start condition
   while ((I2C2->SR1 & 1) == 0); //clear SB
   I2C2->DR = 0xA0; //address the EEPROM
@@ -267,7 +267,9 @@ int main(void)
   while ((I2C2->SR1 & (1<<7)) == 0); //make sure TxE is 1
   while ((I2C2->SR1 & (1<<2)) == 0); //make sure BTF is 1
   I2C2->CR1 |= (1<<9); //send stop condition
-*/
+
+  DWT_Delay_ms(500);
+  */
 
   //read in all user parameters from the EEPROM
   I2C2->CR1 |= (1<<8); //send start condition
@@ -328,6 +330,8 @@ int main(void)
   I2C2->CR1 &= ~(1<<10); //NACK
   I2C2->CR1 |= 1<<9; //STOP
   filterBeta = I2C2->DR;
+
+
 
 
   DWT_Delay_ms(50); //let stuff settle down properly
@@ -528,13 +532,18 @@ int main(void)
 			 }
 			 break;
 
-		 case ParaSet: //return to the SubMenu
+		 case ParaSet: //save parameter and return to the SubMenu
 
 			 status = SubMenu;
+
+			 EEPROMWriteParameter(*(parameterEAddrs[subMenuSelected]+parameterSelected), *(*(parameters[subMenuSelected]+parameterSelected)));
+
+
 			 snprintf(LCDQueueTop, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
 			 snprintf(LCDQueueBottom, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected+1)));
 			 LCDTopQueued = 1; //signal that we need to update the LCD
 			 LCDBottomQueued = 1;
+
 
 			 break;
 
@@ -683,11 +692,12 @@ int main(void)
 
 		  currentADC = adcSmooth[i] >> 5; //convert the filter output to 7 bit, and store it currentADC
 		  //Note: lastFaderValues[i] is 7 bit
+		  //Note: this is NOT division for signed ints, due to the sign bit in front
 
 
 		  if(lastFaderValues[i] != currentADC){ // this particular ADC Channel has been updated
 
-			  MidiCCValues[MidiCCFaderLUT[i]] = currentADC;
+			  MidiCCValues[MidiCCFaderLUT[i]] = currentADC & 0x7f; //mask off only last 7 bits
 
 			  MidiCC(MidiChannel, MidiCCFaderLUT[i], MidiCCValues[MidiCCFaderLUT[i]]);
 
@@ -1120,8 +1130,8 @@ static void MX_GPIO_Init(void)
                           |GPIO_PIN_8|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_12|GPIO_PIN_13
+                          |GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC13 PC14 PC15 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
@@ -1152,6 +1162,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA9 PA10 */

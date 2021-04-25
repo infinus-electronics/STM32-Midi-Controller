@@ -35,6 +35,15 @@ int8_t *parameters3[8] = {&MidiNoteOffset, &MidiNoteVelo};
 int8_t *parameters4[8] = {&MidiChannel, &filterBeta};
 int8_t **parameters[8] = {parameters0, parameters1, parameters2, parameters3, parameters4}; //pointers to all arrays to make life easier
 
+//addresses of the parameters in EEPROM
+const uint16_t parameterEAddr0[8] = {3, 4, 5};
+const uint16_t parameterEAddr1[8] = {6, 10, 7, 11, 8, 12, 9, 13};
+const uint16_t parameterEAddr2[8] = {14, 15, 16, 17};
+const uint16_t parameterEAddr3[8] = {0, 1};
+const uint16_t parameterEAddr4[8] = {2, 18};
+const uint16_t *parameterEAddrs[5] = {parameterEAddr0, parameterEAddr1, parameterEAddr2, parameterEAddr3, parameterEAddr4};
+
+
 
 //lower bounds for all parameters
 const int8_t parameterLB0[8] = {0, 0, 0};

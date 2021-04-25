@@ -9,6 +9,8 @@
 #define SRC_EEPROM_H_
 
 
+#include <stdint.h>
+
 /*
  * Serialisation Format
  *
@@ -23,9 +25,20 @@
  * 18 Filter Beta
  */
 
-uint8_t EEPROMQueued = 0;
-uint8_t EEPROMData = 0;
-uint16_t EEPROMAddress = 0;
+extern uint8_t EEPROMQueued;
+extern uint8_t EEPROMData;
+extern uint16_t EEPROMAddress;
+
+
+//implement a FIFO
+extern uint8_t eepromDataQueue[64];
+extern volatile int8_t inputEEPROMBufferPosition;
+extern volatile int8_t outputEEPROMBufferPosition; //this will be incremented in an interrupt
+
+
+
+
+void EEPROMWriteParameter(uint16_t parameterAddress, uint8_t value);
 
 
 

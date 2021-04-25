@@ -38,7 +38,7 @@ Core/Src/stm32f1xx_it.o: ../Core/Src/stm32f1xx_it.c ../Core/Inc/main.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_core.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_ioreq.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_ctlreq.h \
- ../Core/Src/LEDMatrix.h ../Core/Src/LCD.h
+ ../Core/Src/LEDMatrix.h ../Core/Src/LCD.h ../Core/Src/EEPROM.h
 
 ../Core/Inc/main.h:
 
@@ -125,3 +125,5 @@ Core/Src/stm32f1xx_it.o: ../Core/Src/stm32f1xx_it.c ../Core/Inc/main.h \
 ../Core/Src/LEDMatrix.h:
 
 ../Core/Src/LCD.h:
+
+../Core/Src/EEPROM.h:

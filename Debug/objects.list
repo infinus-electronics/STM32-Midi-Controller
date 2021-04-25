@@ -1,5 +1,6 @@
 "Core/Src/ADC.o"
 "Core/Src/DWT_Delay.o"
+"Core/Src/EEPROM.o"
 "Core/Src/LCD.o"
 "Core/Src/LEDMatrix.o"
 "Core/Src/Menu.o"
