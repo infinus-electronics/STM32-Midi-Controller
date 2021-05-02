@@ -770,7 +770,7 @@ int main(void)
 
 			  if((currentKeyMatrix & (1<<i)) && ((lastKeyMatrix & (1<<i)) == 0)){ //this key was pressed
 
-				  MidiNoteOn(MidiChannel, MidiNoteLUT[i], 127);
+				  MidiNoteOn(MidiChannel, MidiNoteLUT[i], MidiNoteVelo);
 
 			  }
 
