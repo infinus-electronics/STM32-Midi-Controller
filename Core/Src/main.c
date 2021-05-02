@@ -422,6 +422,7 @@ int main(void)
   while (1)
   {
 	  IWDG->KR = 0xAAAA; //reset the watchdog timer
+	  flushMidi();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -1,3 +1,5 @@
-Midi.c:12:6:MidiCC	24	static
-Midi.c:25:6:MidiNoteOn	24	static
-Midi.c:36:6:MidiNoteOff	24	static
+Midi.c:20:6:MidiTransmit	24	static
+Midi.c:32:6:MidiCC	24	static
+Midi.c:46:6:MidiNoteOn	24	static
+Midi.c:58:6:MidiNoteOff	24	static
+Midi.c:68:6:flushMidi	144	static
