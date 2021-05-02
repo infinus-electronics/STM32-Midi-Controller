@@ -390,7 +390,9 @@ int main(void)
 
 		  MidiNoteLUT[5*(3-i)+j+1] = MidiNoteOffset + (4*i+j); //math...
 
+
 	  }
+	  MidiNoteLUT[5*i] = EncoderNote[i];
 
   }
 
@@ -539,7 +541,21 @@ int main(void)
 
 			 EEPROMWriteParameter(*(parameterEAddrs[subMenuSelected]+parameterSelected), *(*(parameters[subMenuSelected]+parameterSelected)));
 
+			 //if we were changing notenames
+			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){ //update the note definitions
 
+				 for(int i = 0; i < 4; i++){ //function to fill in the MidiNoteLut
+
+					 for(int j = 0; j < 4; j++){
+
+						 MidiNoteLUT[5*(3-i)+j+1] = MidiNoteOffset + (4*i+j); //math...
+
+
+					 }
+					 MidiNoteLUT[5*i] = EncoderNote[i];
+
+				 }
+			 }
 			 snprintf(LCDQueueTop, 17, "\x7E%s", (*(subMenus[subMenuSelected]+parameterSelected)));
 			 snprintf(LCDQueueBottom, 17, " %s", (*(subMenus[subMenuSelected]+parameterSelected+1)));
 			 LCDTopQueued = 1; //signal that we need to update the LCD
@@ -607,6 +623,10 @@ int main(void)
 			 if((subMenuSelected == 2) | (subMenuSelected == 3 && parameterSelected == 0)){
 				 snprintf(LCDQueueBottom, 17, "%s%d", noteNames[(*(*(parameters[subMenuSelected]+parameterSelected))) % 12], (int8_t)(((*(*(parameters[subMenuSelected]+parameterSelected))) / 12) - 1)); //print the NOTENAME of the parameter under question
 			 }
+			 else{
+				 //snprintf(LCDQueueBottom, 17, "%d", *(parameterLBs[subMenuSelected]+parameterSelected));
+				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected))));//print the current value of the parameter under question
+			 }
 
 			 //update red LED's to indicate positions of C
 			 if(subMenuSelected == 3 && parameterSelected == 0){
@@ -635,10 +655,7 @@ int main(void)
 			 }
 
 			 //nothing special
-			 else{
-				 //snprintf(LCDQueueBottom, 17, "%d", *(parameterLBs[subMenuSelected]+parameterSelected));
-				 snprintf(LCDQueueBottom, 17, "%d", (*(*(parameters[subMenuSelected]+parameterSelected))));//print the current value of the parameter under question
-			 }
+
 			 LCDBottomQueued = 1;
 			 break;
 
